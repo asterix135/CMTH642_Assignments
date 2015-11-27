@@ -1,0 +1,30 @@
+############################################
+# My files
+############################################
+homework1_C_Graham_cache
+homework1_C_Graham_files
+Assignment2_C_Graham_cache
+Assignment2_C_Graham_files
+homework3_C_Graham_cache
+homework3_C_Graham_files
+
+
+############################################
+# R Section
+############################################
+
+# History files
+.Rhistory
+.Rapp.history
+
+# Example code in package build process
+*-Ex.R
+
+# RStudio files
+.Rproj.user/
+.DS_Store
+.RData
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf

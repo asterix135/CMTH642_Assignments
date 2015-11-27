@@ -1,0 +1,108 @@
+---
+title: "Assignment 2 - Handwriting Recognition"
+author: "Christopher Graham"
+date: "November 11, 2015"
+output: pdf_document
+---
+
+# Problem
+
+We are attempting to set up an algorithm that predicts a handwritten digit
+based on a 4x4 bmp, where each pixel is represented by a 0-255 grey scale value.
+
+We are provided with a training set of 7493 observations and a test set of 
+3497 observations.
+
+For this analysis we will be using a knn algorithm to identify digits.
+
+The data is provided in a cleaned format, with all pixel data using an
+identical scale.  Thus no pre-processing is necessary and we can proceed 
+directly to knn implementation.
+
+```{r setup, cache=TRUE, message=FALSE}
+# Import libraries and data
+require(RWeka)
+require(caret)
+require(e1071)
+test_set <- read.csv('pendigits.tes.csv')
+train_set <- read.csv('pendigits.tra.csv')
+```
+
+# Model Development - choosing a value for k
+
+The first thing to do is to figure out the k-value that optimizes the
+predictive value of our model.  In order to avoid any possible risk of 
+over-fitting with our test data, this part of the analysis will be conducted
+solely on the training data, using k-fold cross-validation to determine our 
+optimal k value.  Distance is calculated as Euclidian distance.
+
+```{r knn1, cache=TRUE}
+correct_pct <- data.frame(k = NULL, pctCorrect = NULL)
+for (k in 1:10) {
+    set.seed(2465)
+    classifier <- IBk(X8~., data = train_set,
+                  control = Weka_control(K = k))
+    eval_data <- evaluate_Weka_classifier(classifier, numFolds = 10)
+    correct_pct[k,1] <- k
+    correct_pct[k,2] <- eval_data[[2]][1]
+}
+colnames(correct_pct) <- c('k', 'pct_correct')
+correct_pct
+
+plot(correct_pct$k, correct_pct$pct_correct, type='l',
+     ylab = "Percent Correct",
+     xlab = 'k value',
+     main = 'Predicted Accuracy of kNN for different k values')
+
+```
+
+# Testing and Evaluating Model
+
+While there is minimal variation in the predictive quality, this analysis
+suggests an optimal result with k=2.
+
+Based on these results, we now apply the model to our test data set
+to see how it actually performs.
+
+Note, that for this part of the analysis, we've decided to use the knn function
+from the class package just for a change of pace.  This algorithm also uses
+Euclidian distance.
+
+\newpage
+
+```{r knn2, cache=TRUE, message=FALSE}
+require(class)
+test_pred <- as.integer(as.character(knn(train_set, test_set, 
+                                             train_set$X8, 2)))
+conf_matrix <- confusionMatrix(test_pred, test_set$X8)
+conf_matrix
+```
+
+\newpage
+
+# Conclusions
+
+When applying the model to test data, we see a small drop in overall predictive
+accuracy (from 0.997 to 0.977) for the model.  A drop-off in prediction is 
+completely normal in moving from a model's training to test set.  This is
+especially true when we consider that the digits in the training set were
+written by a different set of individuals than the digits in the test set,
+indicating that our model has likely been somewhat over-fit to the
+peculiarities of the handwriting of the individuals who contributed to the 
+training data.  (Details an the original data set can be foundat: 
+http://archive.ics.uci.edu/ml/datasets/Pen-Based+Recognition+of+Handwritten+Digits)
+
+It's also kind of interesting to look at how the model performed in terms of
+predictive ability for different digits.  The model is best a predicting the
+digit 6 (specificity = 1) and worst at predicting 9 (specificity = 0.952)
+
+Overall, the results are consistent with the knn results posted on the MNIST
+database of handwritten digits (http://yann.lecun.com/exdb/mnist/). While other
+models (notably: convolutional nets and neural nets) seem to offer better error
+rates, the results provided by a simple knn analysis are fairly strong.
+
+Note, however, that this predictive value is for digital images generated in a
+laboratory experiment in which individuals were instructed to write a single 
+digit inside a box on a pressure-sensitive tablet.  We can anticipate that in 
+actual OCR applications of normal handwritten digits, our predictive 
+performance would be worse.
