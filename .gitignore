@@ -28,3 +28,4 @@ homework3_C_Graham_files
 # produced vignettes
 vignettes/*.html
 vignettes/*.pdf
+.Rproj.user
