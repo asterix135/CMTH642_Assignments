@@ -8,10 +8,15 @@ output: pdf_document
 # Overview **NEED TO REWRITE**
 
 This assignment develops a model to predict a subjective quality rating on 
-Portuguese red vinho verdes.  The data is provided on
+Portuguese red vinho verdes.  The data is provided at
+https://archive.ics.uci.edu/ml/datasets/Wine+Quality and was originally used for
+the paper "Modeling wine preferences by data mining from physicochemical
+properties" available at
+http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.p df
 
-It provides 11 chemical-ish measurement of the wine, and one human-taster
-derived quality score.
+The data set provides provides 11 chemical measurements of Portuges red wines,
+and one quality score assigned by human testers.  The data is complete and
+clean.  Pre-processing is described in the original paper.
 
 Our goal is to develop a model that will predict the quality rating of a wine
 based on these chemical measurements.  Numbered sections of this paper 
@@ -196,6 +201,10 @@ introducing erroneous re-classification.
 
 Finally note, that in following Leek's ensemble modeling methodology, the final
 ensemble model will be run using a Generalized Additive Model (gam).
+
+# Implementation of Wrapper Undersample Algorithm with Ensemble Model
+
+
 
 ```{r initial models, cache=TRUE, message=FALSE}
 
