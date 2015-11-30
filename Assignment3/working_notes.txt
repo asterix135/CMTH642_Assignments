@@ -17,3 +17,9 @@ https://www.quora.com/In-classification-how-do-you-handle-an-unbalanced-training
     Replicate data points for the lagging class and add those to the training data (might increase bias)
     Artificially generate more data points by manually tweaking features. This is sometimes done with with systems involving images, where an existing image can be distorted to create a new image. You run the risk of training the model based on (artificial) samples that aren't representative of the test samples that the model would encounter in the real world.
     Treat the multi-class classifier as a binary classifier for the larger sample. Define the larger class as positive and the smaller class as a negative. This would train your model distinctly on what the larger class looks like, and theoretically classifier the smaller class as "negatives". Your performance will depend on how many features you have for your samples and how tolerant your model can be to overfitting.
+    
+
+From JHU notes:
+caret train parameters
+– weights=NULL = can be used to add weights to observations, useful for unbalanced distribution (a
+lot more of one type than another)

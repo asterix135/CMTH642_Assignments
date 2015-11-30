@@ -1,0 +1,225 @@
+---
+title: 'Assignment 3: CMTH642'
+author: "Christopher Graham"
+date: "November 27, 2015"
+output: pdf_document
+---
+
+# Overview **NEED TO REWRITE**
+
+This assignment develops a model to predict a subjective quality rating on 
+Portuguese red vinho verdes.  The data is provided on
+
+It provides 11 chemical-ish measurement of the wine, and one human-taster
+derived quality score.
+
+Our goal is to develop a model that will predict the quality rating of a wine
+based on these chemical measurements.  Numbered sections of this paper 
+correspond to the numbered instructions in the assignment sheet.
+
+# 1. Import Data
+
+```{r load, message = FALSE}
+# load all libraries required in analysis
+require(caret)
+require(corrplot)
+
+red <- read.csv('winequality-red.csv', sep = ';')
+# Treating as classification problem so convert quality to factor variable
+red$quality <- as.factor(red$quality)
+
+# Divide off a testing set for final validation
+# All work will be done only based on the training set
+set.seed(25678)
+train_idx <- createDataPartition(y=red$quality, p=0.8, list = FALSE)
+training <- red[train_idx,]
+testing <- red[-train_idx,]
+```
+
+# 2. Check Data Characteristics
+
+## Completeness
+
+```{r check data}
+if (sum(complete.cases(testing)) == nrow(testing)) {
+    print('All complete cases')
+}
+```
+
+The data is complete in all variables, and as such there is no need to impute
+values.  
+
+## Class Balance
+
+But the data isn't perfect.  The biggest problem is with the 
+distribution of quality scores.  Specifically, over 80% of the wines have 
+average ratings (5 or 6), and very few wines get ratings at the more extreme
+ends of the rating spectrum.  (3 and 8 are the extreme values awarded, even
+though wines were rated on a 10-point scale).  Class imbalance has been
+shown to be a significant problem in building an effective Machine Learning
+model.  We  provide a strategy for dealing with this below, but first will
+look at some other characteristics of the data.
+
+```{r qual histogram, echo=FALSE}
+ggplot(testing, aes(x=quality)) +
+    geom_histogram(color='black', fill='white') +
+    ggtitle('Distribution of Quality Scores') +
+    xlab('Quality Score')
+```
+
+## Variable Relationships
+
+```{r}
+# Check for variables with near zero variability
+nearZeroVar(training, saveMetrics = TRUE)
+
+# look at correlation between predictor variables
+corrplot(cor(training[-12]), method = 'ellipse', type = 'lower',
+         title = 'Correlation of predictor variables', diag=FALSE,
+         mar=c(0,0,1,0))
+
+# Compare relationsip of quality to predictor variables
+# first normalize the variables so we can compare in one graph
+preObj <- preProcess(training[,-9], method=c('center', 'scale'))
+train_norm <- predict(preObj, training)
+featurePlot(x=train_norm[,-12], y=train_norm$quality, plot='box',
+            main = 'Relation of quality to predictor variables')
+```
+
+What this preliminary exploration tells us is:
+
+- None of the variables show near zero variability, meaning there is no 
+*prima facie* reason to exclude any at the start of our analysis
+- For the most part, there does not seem to be a huge amount of collinearity
+between variables.  There are some instances of collinearity, where it might be
+expected (citric.acid, fixed.acidity and pH), (free.sulfur.dioxide and
+total.sulfur.dioxide).  So there may be some room to reduce dimensionality.
+- There are some clear relationships between some of the predictor variables 
+and wine quality.  volatile.acidity, alcohol and density seem particularly
+important.
+
+## Strategies for dealing with Class Imbalance in Provided Data
+
+Since one of the goals for a prediction system would be to help vintners 
+identify wines that are likely to be either very good or very bad, the lack
+of wine specimens with extreme scores could be problematic for our model
+development.
+
+Dealing with class imbalance is a common problem in machine learning.  The 
+standard approach in this situation is a combination of under-sampling the 
+majority class and over-sampling the minority class to create a distribution
+that will help to develop an adequate predictive model.  However, there is a 
+persistent concern about the extent to which this under & oversampling should 
+occur, and the specific techniques to implement.
+
+While there are different ways of approaching this problem, many of them 
+are designed around a binary response variable.  Specifically, the R package 
+'unbalanced' provides a number of pre-made approaches to dealing with an 
+unbalanced data set.  But, unfortunately, it requires a binary response 
+variable.
+
+In this case, we are approaching this as a multiple-level classification, 
+relying on the classes provided in the original data (reasons for this are 
+discussed below). 
+
+I have identified two different approaches to effectively determining an over-/
+under-sampling approach for multi-class response variables.  The first is the 
+wrapper approach proposed by Chawla et al^[Chawla NV, Cieslak DA, Hall LO, 
+Joshi A. Automatically countering imbalance and its empirical relationship to
+cost. *Data Mining and Knowledge Discovery*. 2008;17(2):225-52.], and the 
+resampling ensemble algorithm proposed by Qian et al^[Y. Qian, et al., A
+resampling ensemble algorithm for classification of imbalance problems,
+*Neurocomputing* (2014), http://dx.doi.org/10.1016/j.neucom.2014.06.021i].
+
+Both of these approaches rely on a combination of SMOTE oversampling and random
+undersampling.  However, the Chawla paper offers a more coherent (and KDD-Cup
+proven!) approach to determining sample levels, and so we will use that
+approach here.
+
+Note, however that the algorithms used in Chawla et al require us to identify
+a classifier algorithm that will be used to determine stop points for sampling.
+
+So, we need to turn briefly to model selection.
+
+# 3. Model Selection
+
+## Regression vs. Classification
+
+As noted on the source page for this data set, the data lends itself to either
+a regression or classification approach.  The original paper to use this data
+set adopted a regression appraoch to the data, arguing that regression allows us
+to better evaluate "near miss" predictions (e.g. if the true value is 3, we can
+up-score the model if it predicts 4, rather than 7).  The paper used both Neural
+Network (NN) and Support Vector Machine (SVM) models, and obtained an accuracy
+rate of 64% with a 0.5 error tolerance in quality prediction, and 89% accuracy 
+with a 1.0 error tolerance.^[Cortez P, Cerdeira A, Almeida F, Matos T, Reis J.
+Modeling wine preferences by data mining from physicochemical properties. 
+Decision Support Systems. 2009;47(4):547-53.]
+
+In order to make things interesting, we're going to address this as a
+classification problem.  This means the fairest comparison for our results is
+with the 0.5 tolerance leve in the original paper, but also that we can hope to
+beat the best results from their SVM model.
+
+## Model Selection
+
+Given the relatively weak predictive accuracy (at T=0.5) for the models in the
+first paper, it appears that a single model may not be all that great at
+classification.  In these instances, one of the more interesting approaches
+is *ensemble learning* - essentially combining predictions from multiple models
+into one super-model.^[Numerous articles have shown this, but see specifically:
+Rokach L. Ensemble-based classifiers. Artificial Intelligence Review.
+2010;33(1):1-39.]
+
+In terms of specific ensemble learning implementation, we are going to use the
+approach suggested by Jeff Leek of John's Hopkins in the Coursera course 
+"Practial Machine Learning"^[Course notes available at: http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machine_Learning_Course_Notes.pdf, staring on p. 67].
+
+In order to build an ensemble model, we first need to build a number of
+individual models to combine into the final approach.  In an attempt to bring
+together all we've done in the course (plus a little bit more!), we're going
+to use:
+
+- multinomial logistic regression (multinom)
+- Naïve Bayes (nb)
+- Linear Discriminant Analysis (lda) - to see if there are any interesting
+differences with Naive Bayes if we don't assume variable independence
+- Random Forest (rf)
+- Boosting; specifically boosting with trees (gbm)
+
+We are specifically excluding the two models of the original paper to see if
+we can do better without the models used there.
+
+Also, that because the SMOTE oversampling algorithm relies on a knn methodology,
+we will not be including knn in the base models in order to avoid potentially
+introducing erroneous re-classification.
+
+Finally note, that in following Leek's ensemble modeling methodology, the final
+ensemble model will be run using a Generalized Additive Model (gam).
+
+```{r initial models, cache=TRUE, message=FALSE}
+
+```
+
+
+
+```{r engine='python'}
+print('this is python 2.7.10')
+import sys
+print(sys.version)
+
+```
+
+
+3. (30 points) Propose a model for the prediction. Give a few reasons for
+your selection briefly. You may choose to model the problem as classification or regression. Define the task, experience and performance criteria.
+4. (30 points) Do 10 fold cross validation in the experiment.
+5. (20 points) Report your results.
+6. (Bonus 20 points) Other researchers have built predictive models using
+this data. Do a brief comparison of your results with the result in the following paper: http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
+
+
+# Citation example
+
+$1.3 million^[source: 
+http://www.millersamuel.com/files/2013/04/Manhattan_1Q_2013.pdf]
