@@ -85,8 +85,8 @@ corrplot(cor(training[-12]), method = 'ellipse', type = 'lower',
 
 # Compare relationsip of quality to predictor variables
 # first normalize the variables so we can compare in one graph
-preObj <- preProcess(training[,-9], method=c('center', 'scale'))
-train_norm <- predict(preObj, training)
+normObj <- preProcess(training[,-9], method=c('center', 'scale'))
+train_norm <- predict(normObj, training)
 featurePlot(x=train_norm[,-12], y=train_norm$quality, plot='box',
             main = 'Relation of quality to predictor variables')
 ```
@@ -204,12 +204,40 @@ ensemble model will be run using a Generalized Additive Model (gam).
 
 # Implementation of Wrapper Undersample Algorithm with Ensemble Model
 
+## Normalizing Data
 
+As per the original paper, we will be evaluating based on normalized data.
+Luckily, we already did this earlier in the *Variable Relationships* section,
+and will thus be referencing train_norm in the following code.
 
-```{r initial models, cache=TRUE, message=FALSE}
+## Model creation
+
+Since this is a fairly complicated model, it will be created as an R function.
+This is particularly important for the iterations to follow.
+
+```{r model code, message=FALSE}
+ensemble_model <- function(train_set, y_col, fit_control) {
+    # Input - training set, col number of y variable & trainControl object
+    # Output - final model
+    multi_pred <- predict(
+        train(train_set[,y_col] ~ ., data = train_set, method = 'multinom',
+              trControl = fit_control, verbose = FALSE),
+        train_set
+    )
+    nb <- NULL
+    lda <- NULL
+    rf <- NULL
+    gbm <- NULL
+}
 
 ```
 
+
+
+```{r final application, eval=FALSE}
+
+
+```
 
 
 ```{r engine='python'}
