@@ -85,8 +85,8 @@ corrplot(cor(training[-12]), method = 'ellipse', type = 'lower',
 
 # Compare relationsip of quality to predictor variables
 # first normalize the variables so we can compare in one graph
-normObj <- preProcess(training[,-9], method=c('center', 'scale'))
-train_norm <- predict(normObj, training)
+norm_obj <- preProcess(training[,-12], method=c('center', 'scale'))
+train_norm <- predict(norm_obj, training)
 featurePlot(x=train_norm[,-12], y=train_norm$quality, plot='box',
             main = 'Relation of quality to predictor variables')
 ```
@@ -161,10 +161,15 @@ with a 1.0 error tolerance.^[Cortez P, Cerdeira A, Almeida F, Matos T, Reis J.
 Modeling wine preferences by data mining from physicochemical properties. 
 Decision Support Systems. 2009;47(4):547-53.]
 
-In order to make things interesting, we're going to address this as a
-classification problem.  This means the fairest comparison for our results is
-with the 0.5 tolerance leve in the original paper, but also that we can hope to
-beat the best results from their SVM model.
+Furthermore, given the somewhat arbitrary way in which quality was scored 
+(median value from 3 or more judges), it's safe to say that these are not 
+absolute values, but rather approximations.  As such, regression probably
+makes most sense.
+
+But Assignment 1 was based around regression, and I'd like to make this one a
+bit more challenging, so I'm going to frame it as a classification problem.
+This means the fairest comparison for our results is with the 0.5 tolerance 
+level in the original paper.
 
 ## Model Selection
 
@@ -178,7 +183,8 @@ Rokach L. Ensemble-based classifiers. Artificial Intelligence Review.
 
 In terms of specific ensemble learning implementation, we are going to use the
 approach suggested by Jeff Leek of John's Hopkins in the Coursera course 
-"Practial Machine Learning"^[Course notes available at: http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machine_Learning_Course_Notes.pdf, staring on p. 67].
+"Practial Machine Learning"^[Course notes available at: http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machine_Learning_Course_Notes.pdf, starting on p. 67].  This is essentially a stacking
+algorithm.
 
 In order to build an ensemble model, we first need to build a number of
 individual models to combine into the final approach.  In an attempt to bring
@@ -187,10 +193,10 @@ to use:
 
 - multinomial logistic regression (multinom)
 - Naïve Bayes (nb)
-- Linear Discriminant Analysis (lda) - to see if there are any interesting
-differences with Naive Bayes if we don't assume variable independence
 - Random Forest (rf)
 - Boosting; specifically boosting with trees (gbm)
+- Linear Discriminant Analysis (lda) - to see if there are any interesting
+differences with Naive Bayes if we don't assume variable independence
 
 We are specifically excluding the two models of the original paper to see if
 we can do better without the models used there.
@@ -199,43 +205,114 @@ Also, that because the SMOTE oversampling algorithm relies on a knn methodology,
 we will not be including knn in the base models in order to avoid potentially
 introducing erroneous re-classification.
 
-Finally note, that in following Leek's ensemble modeling methodology, the final
-ensemble model will be run using a Generalized Additive Model (gam).
+Finally, note that for the final model, we will be running a multinomial
+logistic regression on the intermediate results.
+
 
 # Implementation of Wrapper Undersample Algorithm with Ensemble Model
 
 ## Normalizing Data
 
-As per the original paper, we will be evaluating based on normalized data.
-Luckily, we already did this earlier in the *Variable Relationships* section,
-and will thus be referencing train_norm in the following code.
+As per the original paper, we will be evaluating the feed-in models based on
+normalized data.  This is done through the trainControl parameter in caret.
 
 ## Model creation
 
-Since this is a fairly complicated model, it will be created as an R function.
-This is particularly important for the iterations to follow.
+Since this is a fairly complicated model that needs to be incorporated into
+the rebalancing algorithm, we're going to create a function to return the final
+model for evaluation.
+
+Note that our model evaluation is set using 10 repetitions of 10-fold 
+cross-validation, and that the input data is normalized on each iteration of the
+model..
 
 ```{r model code, message=FALSE}
-ensemble_model <- function(train_set, y_col, fit_control) {
-    # Input - training set, col number of y variable & trainControl object
-    # Output - final model
-    multi_pred <- predict(
-        train(train_set[,y_col] ~ ., data = train_set, method = 'multinom',
-              trControl = fit_control, verbose = FALSE),
-        train_set
-    )
-    nb <- NULL
-    lda <- NULL
-    rf <- NULL
-    gbm <- NULL
+ensemble_eval <- function(train_set) {
+    # Input - training set
+    # Output - list of intermediate & final models
+    # note - model is hard-coded to use quality as output variable
+    
+    # Set parameters for modedl build
+    fit_control <- trainControl(## 10-fold CV
+                                method = "repeatedcv",
+                                number = 10, 
+                                ## repeated ten times
+                                repeats = 10)
+
+    # normalize data with returnable object
+    norm_obj <- preProcess(training[,-12], method=c('center', 'scale'))
+    train_set <- predict(normObj, train_set)
+
+    set.seed(15954)
+    mn_model <- train(quality ~ .,
+                      data = train_set,
+                      method = 'multinom',
+                      trControl = fit_control,
+                      trace = FALSE)
+    mn_pred <- predict(mn_model, train_set)
+    
+    nb_model <- train(quality ~ .,
+                      data = train_set,
+                      method = 'nb',
+                      trControl = fit_control)
+    nb_pred <- predict(nb_model, train_set)
+
+    rf_model <- train(quality ~ .,
+                      data = train_set,
+                      method = 'rf',
+                      trControl = fit_control)
+    rf_pred <- predict(rf_model, train_set)
+
+    gbm_model <- train(quality ~ .,
+                       data = train_set,
+                       method = 'gbm',
+                       trControl = fit_control)
+    gbm_pred <- predict(gbm_model, train_set)
+
+    lda_model <- train(quality ~ .,
+                       data = train_set,
+                       method = 'lda',
+                       trControl = fit_control)
+    lda_pred <- predict(lda_model, train_set)
+   
+    ensemble_data <- data.frame(mn = mn_pred,
+                                nb = nb_pred,
+                                rf = rf_pred,
+                                gbm = gbm_pred,
+                                lda = lda_pred,
+                                quality=train_set$quality)
+
+    final_model <- train(quality ~ .,
+                         data = ensemble_data,
+                         method = 'multinom',
+                         trControl = fit_control,
+                         trace=FALSE)
+
+    return(list(ensemble_model,
+                mn_model,
+                nb_model,
+                rf_model,
+                gbm_model,
+                lda_model,
+                norm_obj))
 }
 
 ```
 
+As a baseline, before dealing with the class imbalance, let's see how our
+model performs:
+
+```{r inital results, cache=TRUE, message=FALSE, warning=FALSE}
+base_model <- ensemble_eval(training)
+```
+
+
 
 
 ```{r final application, eval=FALSE}
-
+# 1. create pre-processing object from final training data (to apply to test)
+pre_pro <- preProcess()
+foo <- function(var1, var2)
 
 ```
 

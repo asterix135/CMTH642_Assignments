@@ -31,20 +31,19 @@ fitControl <- trainControl(## 10-fold CV
     method = "repeatedcv",
     number = 10,
     ## repeated ten times
-    repeats = 10,
-    savePredictions = TRUE)
+    repeats = 10)
 
 fit_lm <- train(quality ~ ., data=training, method='lm',
               trControl = fitControl)
 
 fit_mn <- train(quality ~ ., data=training, method='multinom',
-                 trControl = fitControl, verbose = FALSE)
+                 trControl = fitControl, verbose = FALSE, trace=FALSE)
 fit_gbm <- train(quality ~ ., data=training, method='gbm',
                  trControl = fitControl, verbose = FALSE)
 fit_rf <- train(quality ~ ., data=training, method='rf',
                 trControl = fitControl)
 fit_lda <- train(quality ~ ., data = training, method = 'lda',
-                 trContro = fitControl)
+                 trControl = fitControl)
 fit_svm <- train(quality ~ ., data=training, method='svmRadial',
                  trControl = fitControl)
 fit_nn <- train(quality ~ ., data=training, method='nnet',
