@@ -169,7 +169,8 @@ makes most sense.
 But Assignment 1 was based around regression, and I'd like to make this one a
 bit more challenging, so I'm going to frame it as a classification problem.
 This means the fairest comparison for our results is with the 0.5 tolerance 
-level in the original paper.
+level in the original paper as a difference of less than 0.5 would round to 
+the correct value.
 
 As a classification problem, our primary evaluation metric will be 
 classification accuracy.
