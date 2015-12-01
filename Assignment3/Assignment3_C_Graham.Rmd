@@ -171,6 +171,9 @@ bit more challenging, so I'm going to frame it as a classification problem.
 This means the fairest comparison for our results is with the 0.5 tolerance 
 level in the original paper.
 
+As a classification problem, our primary evaluation metric will be 
+classification accuracy.
+
 ## Model Selection
 
 Given the relatively weak predictive accuracy (at T=0.5) for the models in the
@@ -191,7 +194,7 @@ individual models to combine into the final approach.  In an attempt to bring
 together all we've done in the course (plus a little bit more!), we're going
 to use:
 
-- multinomial logistic regression (multinom)
+- multinomial logistic regression (multinom or mn)
 - Naïve Bayes (nb)
 - Random Forest (rf)
 - Boosting; specifically boosting with trees (gbm)
@@ -205,8 +208,8 @@ Also, that because the SMOTE oversampling algorithm relies on a knn methodology,
 we will not be including knn in the base models in order to avoid potentially
 introducing erroneous re-classification.
 
-Finally, note that for the final model, we will be running a multinomial
-logistic regression on the intermediate results.
+Finally, note that for the final model, we will be selecting the modal value
+from the interim results (the simplest model possible - a voting model).
 
 
 # Implementation of Wrapper Undersample Algorithm with Ensemble Model
@@ -227,6 +230,13 @@ cross-validation, and that the input data is normalized on each iteration of the
 model..
 
 ```{r model code, message=FALSE}
+# Function to use in final
+getMode <- function(vect) {
+    unq_vect <- unique(vect)
+    return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
+}
+
+
 ensemble_eval <- function(train_set) {
     # Input - training set
     # Output - list of intermediate & final models
@@ -240,8 +250,8 @@ ensemble_eval <- function(train_set) {
                                 repeats = 10)
 
     # normalize data with returnable object
-    norm_obj <- preProcess(training[,-12], method=c('center', 'scale'))
-    train_set <- predict(normObj, train_set)
+    norm_obj <- preProcess(train_set[,-12], method=c('center', 'scale'))
+    train_set <- predict(norm_obj, train_set)
 
     set.seed(15954)
     mn_model <- train(quality ~ .,
@@ -250,25 +260,30 @@ ensemble_eval <- function(train_set) {
                       trControl = fit_control,
                       trace = FALSE)
     mn_pred <- predict(mn_model, train_set)
-    
+
+    set.seed(15954)    
     nb_model <- train(quality ~ .,
                       data = train_set,
                       method = 'nb',
                       trControl = fit_control)
     nb_pred <- predict(nb_model, train_set)
 
+    set.seed(15954)
     rf_model <- train(quality ~ .,
                       data = train_set,
                       method = 'rf',
                       trControl = fit_control)
     rf_pred <- predict(rf_model, train_set)
 
+    set.seed(15954)
     gbm_model <- train(quality ~ .,
                        data = train_set,
                        method = 'gbm',
-                       trControl = fit_control)
+                       trControl = fit_control,
+                       verbose=FALSE)
     gbm_pred <- predict(gbm_model, train_set)
 
+    set.seed(15954)
     lda_model <- train(quality ~ .,
                        data = train_set,
                        method = 'lda',
@@ -282,19 +297,20 @@ ensemble_eval <- function(train_set) {
                                 lda = lda_pred,
                                 quality=train_set$quality)
 
+    set.seed(15954)
     final_model <- train(quality ~ .,
                          data = ensemble_data,
-                         method = 'multinom',
+                         method = 'nb',
                          trControl = fit_control,
                          trace=FALSE)
 
-    return(list(ensemble_model,
-                mn_model,
-                nb_model,
-                rf_model,
-                gbm_model,
-                lda_model,
-                norm_obj))
+    return(list(final_model = final_model,
+                mn_model = mn_model,
+                nb_model = nb_model,
+                rf_model = rf_model,
+                gbm_model = gbm_model,
+                lda_model = lda_model,
+                norm_obj = norm_obj))
 }
 
 ```
@@ -303,11 +319,62 @@ As a baseline, before dealing with the class imbalance, let's see how our
 model performs:
 
 ```{r inital results, cache=TRUE, message=FALSE, warning=FALSE}
+# First, get the final and interim model results
 base_model <- ensemble_eval(training)
 ```
 
 
+```{r evaluate base model}
+model_summary <- data.frame(model=names(base_model)[1:6], accuracy=rep(0,6))
+for (i in 1:6) {
+    model_summary[i,2] <- base_model[[i]]$results$Accuracy[1]
+}
+model_summary
+```
 
+So this is somewhat unexpected in terms of final results.  Not suprprisingly, 
+each of our individual models has an accuracy hovering around 60% (68% for the 
+random forest model).  But when plugged into an ensemble model, our accuracy
+rate is essentially 100%.  In fact, the only error is a 3-rated wine that
+was incorrectly classified as an 8.
+
+```{r cm base combo}
+confusionMatrix(base_model[[1]])
+```
+
+This smells like overfitting.  So, let's see how the model compares to the test
+set.  As a reminder, the methodology is as follows:
+
+1. Apply the normalization model from the training set to the test data
+2. Run the base models on the normalized training set, and use those predictions 
+to build an interim result data frame.
+3. Run the final ensemble model on the interim result data frame
+4. Evaluate accuracy
+
+We will set this up as a function in case it has to be run again.
+
+```{r test eval function}
+evaluate_test <- function(model_list, test_set) {
+    # 1. apply normalization model
+    test_set <- predict(model_list[[7]], test_set)
+    # 2-3 run base models and create interim result data frame
+    ensemble_data <- data.frame(matrix(NA, nrow=nrow(test_set), ncol=0))
+    for (i in 2:6) {
+        print(i)
+        new_pred <- predict(model_list[[i]], test_set)
+        ensemble_data <- cbind(ensemble_data, new_pred)
+    }
+    colnames(ensemble_data) <- c('mn', 'nb', 'rf', 'gbm', 'lda')
+    # 4. apply final model to interim data frame
+    test_pred <- predict(model_list[[1]], ensemble_data)
+    return(test_pred)
+}
+```
+
+```{r evaluate test}
+test_pred <- evaluate_test(base_model, testing)
+confusionMatrix(test_pred, testing$quality)
+```
 
 ```{r final application, eval=FALSE}
 # 1. create pre-processing object from final training data (to apply to test)
