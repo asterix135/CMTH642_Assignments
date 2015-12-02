@@ -5,7 +5,7 @@
 
 require(caret)
 
-wrapper <- function(class_list, train_set, eval_fun) {
+wrapper <- function(class_list, train_set, eval_fun, seed) {
     # class list is a named vector with -1=Minority, 0 = Neutral; 1 = Majority
     # train_set is a data frame with full training data
     #       Actual values need to be in last column
@@ -29,29 +29,72 @@ wrapper <- function(class_list, train_set, eval_fun) {
     
     # Run undersample loop
     if (sum(class_data['maj',]) > 0) {
-        new <- undersample(class_data, train_set, eval_fun)
-        class_data <- new[[1]]; train_data <- new[[2]]
+        train_data <- wrap_undersample(class_data, train_set, eval_fun, seed)
     }
     # Run smote loop
     if (sum(class_data['min',]) > 0) {
-        smote(class_data, train_set, eval_fun)
+        wrap_smote(class_data, train_set, eval_fun, seed)
         class_data <- new[[1]]; train_data <- new[[2]]
     }
     
     return(list(class_data, train_set))
 }
 
-undersample <- function(class_data, train_data, eval_fun) {
+wrap_undersample <- function(class_data, train_data, eval_fun, seed) {
     # returns list
     # element 1: updated class_data
     # element 2: updated train_data
-    sample_decrement = 0.1
-    increment_minimum = 0.05
     
-    return(list(class_data, train_data))
+    # Set StopSampling Flag to False
+    class_data <- rbind(class_data, stop_sampling = !class_data['maj',])
+    # main loop
+    while (sum(class_data['stop_sampling'] > 0)) {
+        for (i in 1:ncol(class_data)) {
+            if (class_data['stop_sampling',i] == FALSE) {
+                train_len = nrow(train_data)
+                train_data <- undersample(train_data, 
+                                          colnames(class_data)[i],
+                                          class_data,
+                                          eval_fun,
+                                          seed)
+                if (nrow(train_data) == train_len) {
+                    class_data['stop_sampling',i] <- TRUE
+                }
+            }
+            
+        }
+    }
+    
+    return(train_data)
 }
 
-smote <- function(class_data, train_data, eval_fun) {
+
+undersample <- function(train_data, class_val, class_data, eval_fun, seed) {
+    sample_decrement = 0.1
+    increment_minimum = 0.05
+    if (seed) {set.seed(2292)}
+    other_classes <- train_data[train_data[,ncol(train_data)] != class_val,]
+    curr_class <- train_data[train_data[,ncol(train_data)] == class_val,]
+    curr_class <- curr_class[sample(nrow(curr_class), 
+                                    floor(nrow(curr_class) * 
+                                              (1-sample_derement))),]
+    new_train <- rbind(other_classes, curr_class)
+    new_acc <- evaluate_model(eval_fun, new_train)
+    for (i in ncol(class_val)) {
+        if (class_data['maj', i] & 
+            ((class_data['base_val',i] - new_acc[i]) / 
+             class_data['base_val',i] > increment_minimum)) {
+            return(train_data)
+        } else if (class_data['min', i] & 
+                   (class_data['base_val', i] > new_acc[i])) {
+            return(train_data)
+        }
+    }
+    return(new_train)
+}
+
+
+wrap_smote <- function(class_data, train_data, eval_fun) {
     # returns list
     # element 1: updated class_data
     # element 2: updated train_data
