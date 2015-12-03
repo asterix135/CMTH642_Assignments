@@ -1,15 +1,15 @@
 # For Testing
 
-
+# Function to use in final
 getMode <- function(vect) {
     unq_vect <- unique(vect)
     return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
 }
 
 
-ensemble_eval <- function(train_set) {
+ensemble_eval <- function(train_set, test_set = NULL) {
     # Input - training set
-    # Output - list of intermediate & final models
+    # Output - list of final predictions, intermediate models & normalizer
     # note - model is hard-coded to use quality as output variable
     
     # Set parameters for modedl build
@@ -66,19 +66,28 @@ ensemble_eval <- function(train_set) {
                                 gbm = gbm_pred,
                                 lda = lda_pred)
     
-
-    ensemble_data <- ensemble_data[,-6]
-    final_model <- apply(ensemble_data, 1, function(x) getMode(x))
-
-
-    return(list(final_model = final_model,
-                mn_model = mn_model,
-                nb_model = nb_model,
-                rf_model = rf_model,
-                gbm_model = gbm_model,
-                lda_model = lda_model,
-                norm_obj = norm_obj))
+    final_pred <- apply(ensemble_data, 1, function(x) getMode(x))
+    
+    if (missing(test_set)) {
+            return(list(final_model = final_pred,
+                    mn_model = mn_model,
+                    nb_model = nb_model,
+                    rf_model = rf_model,
+                    gbm_model = gbm_model,
+                    lda_model = lda_model,
+                    norm_obj = norm_obj))
+    } else {
+        return(evaluate_test(list(final_model = final_pred,
+                                  mn_model = mn_model,
+                                  nb_model = nb_model,
+                                  rf_model = rf_model,
+                                  gbm_model = gbm_model,
+                                  lda_model = lda_model,
+                                  norm_obj = norm_obj),
+                             test_set))
+    }
 }
+
 
 evaluate_test <- function(model_list, test_set) {
     # 1. apply normalization model

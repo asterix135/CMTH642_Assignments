@@ -36,6 +36,7 @@ red$quality <- as.factor(red$quality)
 # Divide off a testing set for final validation
 # All work will be done only based on the training set
 set.seed(25678)
+# Note that createDataPartition attempts to balance classes
 train_idx <- createDataPartition(y=red$quality, p=0.8, list = FALSE)
 training <- red[train_idx,]
 testing <- red[-train_idx,]
@@ -53,6 +54,25 @@ if (sum(complete.cases(testing)) == nrow(testing)) {
 
 The data is complete in all variables, and as such there is no need to impute
 values.  
+
+## 2-D Visualization
+
+Applying Principal Component Analysis to the data set, we can capture over 99%
+of the variance with 2 Principal Components, giving us a pretty good
+visualization of the data:
+
+```{r pca visualization}
+pc_comp <- prcomp(log10(training[,-12]+1))
+plot(pc_comp$x[,1], pc_comp$x[,2],
+     col = training$quality,
+     main = 'Red Wine - PCA Plot (Log10 Scale)',
+     xlab = 'PCA1',
+     ylab = 'PCA2')
+```
+
+Essentially, it's a mess, with no readily apparent trends.  There seems to be a
+bit of a division between some of the major classes, but nothing particularly
+clear.  We'll see if we can make sense of it with some machine learning.
 
 ## Class Balance
 
@@ -188,7 +208,7 @@ However, following the arguments made by Chawla et al, our over/under sampling
 algorithm will be based on the model's f-statistic:
 
 \[
-    f measure = \frac{2 * precision * recall}{recall + precision}
+    f-measure = \frac{2 * precision * recall}{recall + precision}
 \]
 
 **NEED TO WRITE A BIT MORE HERE**

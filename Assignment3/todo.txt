@@ -1,14 +1,24 @@
 TODO:
 
-1) test stratified function for data splitting
-
 2) Test over_under wrapper
+    evaluate_model: NEED TO CORRECT TO PREDICT ON ORIGINAL DATA
+    populate: good
+    smote: good
+    smote_sample: good
+    wrap_smote: good
+    undersample: good
+    wrap_undersample: good
+    wrapper: good
+
+2a) Check whole over_under when evaluate fixed
+
+2b) Delete all the print statements from over_under
 
 3) Try a couple of different approaches to final model development
 
 4) Run algo on resampled data
 
-5) visualize dimensionally reduced data
+5) Try the whole thing with dimensionally-reduced data
 
 6) Rewrite intro/Overview
 
