@@ -1,0 +1,19 @@
+TODO:
+
+1) test stratified function for data splitting
+
+2) Test over_under wrapper
+
+3) Try a couple of different approaches to final model development
+
+4) Run algo on resampled data
+
+5) visualize dimensionally reduced data
+
+6) Rewrite intro/Overview
+
+6) Write section on performance criteria
+
+7) Compare with paper
+
+8) Conclusion

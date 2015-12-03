@@ -22,7 +22,7 @@ Our goal is to develop a model that will predict the quality rating of a wine
 based on these chemical measurements.  Numbered sections of this paper 
 correspond to the numbered instructions in the assignment sheet.
 
-# 1. Import Data
+# 1. Import and Split Data
 
 ```{r load, message = FALSE}
 # load all libraries required in analysis
@@ -175,6 +175,24 @@ the correct value.
 As a classification problem, our primary evaluation metric will be 
 classification accuracy.
 
+## Performance Criteria
+
+In order to ensure easy comparability with the original paper, and for 
+simplicity of understanding, our primary judge of performance will be overall
+model accuracy.
+
+However, overall accuracy does not indicate how effective our model is at 
+identifying minority class examples.
+
+However, following the arguments made by Chawla et al, our over/under sampling
+algorithm will be based on the model's f-statistic:
+
+\[
+    f measure = \frac{2 * precision * recall}{recall + precision}
+\]
+
+**NEED TO WRITE A BIT MORE HERE**
+
 ## Model Selection
 
 Given the relatively weak predictive accuracy (at T=0.5) for the models in the
@@ -212,7 +230,7 @@ introducing erroneous re-classification.
 Finally, note that for the final model, the model we will use is a simple
 plurality vote among the model responses (the modal value).
 
-# Implementation of Wrapper Undersample Algorithm with Ensemble Model
+# Implementation of Ensemble Model
 
 ## Normalizing Data
 
@@ -395,7 +413,12 @@ Simplified, the algorithm works as follows:
 1) Establish a baseline performance level for each majority and minority class
 2) For each Majority class, undersample by 10% until either minority class
 predictions stop improving, or until majority class predections degrade by 5%.
-3) For each Minority class, SMOTE oversample by 100% **NEED TO FIGURE THIS OUT**
+3) For each Minority class, SMOTE oversample by 100%, and continue this 
+until performance is increased by less than 5%.
+
+Perfomance is evaluated on f-stat, which is:
+
+**PUT F-STAT HERE IN MATH FORMAT**
 
 Specific
 
