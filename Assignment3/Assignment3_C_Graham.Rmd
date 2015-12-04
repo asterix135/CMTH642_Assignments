@@ -12,7 +12,7 @@ Portuguese red vinho verdes.  The data is provided at
 https://archive.ics.uci.edu/ml/datasets/Wine+Quality and was originally used for
 the paper "Modeling wine preferences by data mining from physicochemical
 properties" available at
-http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.p df
+http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
 
 The data set provides provides 11 chemical measurements of Portuges red wines,
 and one quality score assigned by human testers.  The data is complete and
@@ -28,6 +28,11 @@ correspond to the numbered instructions in the assignment sheet.
 # load all libraries required in analysis
 require(caret)
 require(corrplot)
+require(FNN)
+
+# load functions that are used later in analysis
+source('ensemble_eval.R')
+source('over_under_wrapper.R')
 
 red <- read.csv('winequality-red.csv', sep = ';')
 # Treating as classification problem so convert quality to factor variable
@@ -61,7 +66,7 @@ Applying Principal Component Analysis to the data set, we can capture over 99%
 of the variance with 2 Principal Components, giving us a pretty good
 visualization of the data:
 
-```{r pca visualization}
+```{r pca visualization, warning=FALSE, message=FALSE}
 pc_comp <- prcomp(log10(training[,-12]+1))
 plot(pc_comp$x[,1], pc_comp$x[,2],
      col = training$quality,
@@ -85,7 +90,7 @@ shown to be a significant problem in building an effective Machine Learning
 model.  We  provide a strategy for dealing with this below, but first will
 look at some other characteristics of the data.
 
-```{r qual histogram, echo=FALSE}
+```{r qual histogram}
 ggplot(testing, aes(x=quality)) +
     geom_histogram(color='black', fill='white') +
     ggtitle('Distribution of Quality Scores') +
@@ -137,7 +142,7 @@ that will help to develop an adequate predictive model.  However, there is a
 persistent concern about the extent to which this under & oversampling should 
 occur, and the specific techniques to implement.
 
-While there are different ways of approaching this problem, many of them 
+While there are different pre-made solutions to this problem, many of them 
 are designed around a binary response variable.  Specifically, the R package 
 'unbalanced' provides a number of pre-made approaches to dealing with an 
 unbalanced data set.  But, unfortunately, it requires a binary response 
@@ -149,12 +154,9 @@ discussed below).
 
 I have identified two different approaches to effectively determining an over-/
 under-sampling approach for multi-class response variables.  The first is the 
-wrapper approach proposed by Chawla et al^[Chawla NV, Cieslak DA, Hall LO, 
-Joshi A. Automatically countering imbalance and its empirical relationship to
-cost. *Data Mining and Knowledge Discovery*. 2008;17(2):225-52.], and the 
-resampling ensemble algorithm proposed by Qian et al^[Y. Qian, et al., A
-resampling ensemble algorithm for classification of imbalance problems,
-*Neurocomputing* (2014), http://dx.doi.org/10.1016/j.neucom.2014.06.021i].
+wrapper approach proposed by Chawla et al^[Chawla et al "Automatically 
+countering imbalance..."], and the resampling ensemble algorithm proposed by 
+Qian et al^[Qian et al. "A resampling ensemble algorithm..."].
 
 Both of these approaches rely on a combination of SMOTE oversampling and random
 undersampling.  However, the Chawla paper offers a more coherent (and KDD-Cup
@@ -181,10 +183,10 @@ with a 1.0 error tolerance.^[Cortez P, Cerdeira A, Almeida F, Matos T, Reis J.
 Modeling wine preferences by data mining from physicochemical properties. 
 Decision Support Systems. 2009;47(4):547-53.]
 
-Furthermore, given the somewhat arbitrary way in which quality was scored 
-(median value from 3 or more judges), it's safe to say that these are not 
-absolute values, but rather approximations.  As such, regression probably
-makes most sense.
+Furthermore, given the somewhat arbitrary way in which quality scores were
+derived (the median value from 3 or more judges), it's safe to say that these 
+are not absolute values, but rather approximations.  As such, regression 
+probably makes most sense.
 
 But Assignment 1 was based around regression, and I'd like to make this one a
 bit more challenging, so I'm going to frame it as a classification problem.
@@ -192,26 +194,32 @@ This means the fairest comparison for our results is with the 0.5 tolerance
 level in the original paper as a difference of less than 0.5 would round to 
 the correct value.
 
-As a classification problem, our primary evaluation metric will be 
-classification accuracy.
-
 ## Performance Criteria
 
 In order to ensure easy comparability with the original paper, and for 
 simplicity of understanding, our primary judge of performance will be overall
-model accuracy.
+classification accuracy.
 
 However, overall accuracy does not indicate how effective our model is at 
-identifying minority class examples.
+identifying minority class examples.  
 
-However, following the arguments made by Chawla et al, our over/under sampling
-algorithm will be based on the model's f-statistic:
+Note that because we are implementing the Chawla et al algorithm, our over/under 
+sampling function will evaluate performance based on the model's f-statistic 
+(also known as F1 score).  The closer this is to 1, the better the performance:
 
 \[
     f-measure = \frac{2 * precision * recall}{recall + precision}
 \]
 
-**NEED TO WRITE A BIT MORE HERE**
+The f-stastic is a good overall performance measure, balancing precision and
+recall.  We will therefore look at the f-stat for non-average-rated wines.  This 
+will give us a better understanding of how well our model identifies bad or 
+excellent wines.  For the purposes of this analysis, we define non-average-rated
+wines as having a quality score of 3, 4, 7 or 8.
+
+In order to minimize the impact of the relative overweight in class 7, we will
+be using the mean of the f-stats for these four classes, rather than 
+calculating an overall f-stat for all non-average-rated classes combined.
 
 ## Model Selection
 
@@ -250,86 +258,88 @@ introducing erroneous re-classification.
 Finally, note that for the final model, the model we will use is a simple
 plurality vote among the model responses (the modal value).
 
-# Implementation of Ensemble Model
+The code for the specific model being run is in Appendix A.
+
+## k-fold Cross-validation
+
+Note that our model evaluation is set using 10 repetitions of 10-fold 
+cross-validation, and that the input data is normalized on each iteration of the
+model.  This is set through the trainControl function in the caret library.
 
 ## Normalizing Data
 
 As per the original paper, we will be evaluating the feed-in models based on
-normalized data.  This is done through the trainControl parameter in caret.
+standardized data.  This is done through the preProcess function in caret.
 
-## Model creation and baseline testing
+# Implementation of Ensemble Model
 
-Since this is a fairly complicated model that needs to be incorporated into
-the rebalancing algorithm, we're going to create a function to return the final
-model for evaluation.
-
-Note that our model evaluation is set using 10 repetitions of 10-fold 
-cross-validation, and that the input data is normalized on each iteration of the
-model.
-
-```{r model code, message=FALSE}
-# Function to use in final
-source('ensemble_eval.R')
-```
+## Model baseline testing
 
 As a baseline, before dealing with the class imbalance, let's see how our
 model performs:
 
 ```{r inital results, cache=TRUE, message=FALSE, warning=FALSE}
 # First, get the final and interim model results
-base_model <- ensemble_eval(training)
-```
-
-```{r evaluate base model}
-model_summary <- data.frame(model=names(base_model)[1:6], accuracy=rep(0,6))
-model_summary[1,2] <- confusionMatrix(base_model[[1]], 
-                                      training$quality)$overall[1]
-for (i in 2:6) {
-    model_summary[i,2] <- base_model[[i]]$results$Accuracy[1]
-}
-model_summary
+base_results <- ensemble_eval(training)
 ```
 
 ```{r cm base combo}
-confusionMatrix(base_model[[1]], training$quality)
+# complete confusion matrix for final model
+cm <- confusionMatrix(base_results[[1]], training$quality)
+cm
+```
+
+The model gives us a pretty good result overall, with a predicted 71% accuracy 
+on the training data, better than the 64% accuracy (at a 0.5 threshhold) from 
+the original paper.  
+
+The f-stats for the minority classes (3,4,7 and 8), however, are noticably
+better for our base model than for the original paper:^[Note that because the
+original paper predicted 0 true positives for class 3 and class 8, the f-stat
+for each of those is technically NaN.  I have substituted with zero to compare.]
+
+```{r base f stat}
+# Average non-average-quality f-stat for our model
+f_stat <- NULL
+for (i in c(1,2,5,6)) {
+    f_stat<- c(f_stat, 
+               (2 * cm$byClass[i,1] * cm$byClass[i,3]) / 
+                   (cm$byClass[i,1] + cm$byClass[i,3]))
+}
+f_stat <- mean(f_stat)
+
+# Average non-average-quality f-stat for original paper
+paper_f <- mean(c(0, 0, (2*(1/53)*(1/5))/(1/53+1/5), 
+                  (2*(82/199)*(82/140))/(82/199+82/140)))
+
+f_stat; paper_f
 ```
 
 ## Baseline against test set
 
-Thm model gives us a pretty good result overall, with a predicted 71% accuracy 
-on the training data, beating than the 64% accuracy (at a 0.5 threshhold) from 
-the original paper.  As a test, we'll apply this model to the test data and see 
-if this is legitimate or due to overfitting.
+As a test, we'll apply this model to the test data and see if our results are
+legitimate or due to overfitting.
 
-```{r test eval function}
-#This was sourced already
+```{r base test preds, warning=FALSE, message=FALSE, cache=TRUE}
+base_test <- ensemble_eval(training, testing)
 ```
 
-```{r evaluate test}
+```{r test results, warning=FALSE}
+cm2 <- confusionMatrix(base_test$final, testing$quality)
+cm2
 
-# need to fix this
-test_pred <- evaluate_test(base_model, testing)
-class_sensitivity <- data.frame(matrix(NA, nrow=0, ncol=6))
-model_summary <- cbind(model_summary, test_results = rep(0,6))
-for (i in 1:ncol(test_pred)) {
-    cm <- confusionMatrix(factor(test_pred[,i], levels = c(3,4,5,6,7,8)),
-                          testing$quality)
-    model_summary[i,3] <- cm$overall[1]
-    class_sensitivity <- rbind(class_sensitivity, cm$byClass[,1])
-}
-colnames(class_sensitivity) <- row.names(cm$byClass)
-class_sensitivity <- cbind(model = colnames(test_pred), class_sensitivity)
-model_summary
-class_sensitivity
+# Average non-average-quality f-stat for our model
+test_f <- mean(c(0,0,0,(2*cm2$byClass[5,1] * cm2$byClass[5,3])/ (cm2$byClass[5,1] + cm2$byClass[5,3])))
+test_f
 ```
 
-Interestingly, what we see here is that, for the test set, our final model
-has a significantly degreaded peformance, even though each of the individual
-models actually had improved performance.
+When we apply our model to the testing set, we see a relatively significant
+degredation in performance - essentially to the level of the original paper,
+likely indicating some overfitting.
 
-And when we drill down, what we're seeing is that while the model is doing a
-decent job predicting 5 & 6 values, our specificity for the rare classes 
-(3, 4, 8, and to a lesser extent, 7) is quite appalling.
+Importantly, our model is doing a very poor job at predicting minority classes; 
+especially quality ratings of 3, 4, and 8, which have the weakest representation
+in our data.
 
 So, in an effort to improve on this, we need to turn to our function for 
 undersampling and SMOTE oversampling.
@@ -346,31 +356,104 @@ Simplified, the algorithm works as follows:
 2) For each Majority class, undersample by 10% until either minority class
 predictions stop improving, or until majority class predections degrade by 5%.
 3) For each Minority class, SMOTE oversample by 100%, and continue this 
-until performance is increased by less than 5%.
+until that minority class performance is increased by less than 5%.
 
-Perfomance is evaluated on f-stat, which is:
+The specific R code for my implementation is shown in Appendix 2.  The
+algorithm returns a reshaped data set that will be used to generate our
+final predictive model.
 
-**PUT F-STAT HERE IN MATH FORMAT**
-
-Specific
-
-```{r wrapper algo}
-source('over_under_wrapper.R')
+```{r reshape, cache=TRUE, warning=FALSE, message=FALSE}
+# algorithm needs a named vector of class categories
+#       with -1 = minority; 1 = majority; 0 = neutral
+class_list <- c(-1,-1,1,1,0,-1)
+names(class_list) <- c(3,4,5,6,7,8)
+new_training <- wrapper(class_list = class_list, train_set = training,
+                        eval_fun = ensemble_eval, seed=TRUE)
 ```
 
+First, let's see how our new distribution compares to the original training
+data:
 
-
-```{r engine='python'}
-print('this is python 2.7.10')
-import sys
-print(sys.version)
-
+```{r examine new}
+hist(training$quality, col=rgb(1,0,0,0.5),
+     main="Original vs. Reshaped Quality Distribution", 
+     xlab="Quality Rating")
+hist(new_training, col=rgb(0,0,1,0.5), add=T)
+legend("topright",
+       c("Original", "Reshaped"),
+       col=c(rgb(1,0,0,0.5), rgb(0,0,1,0.5)),
+       lwd=10)
+box()
 ```
 
+# **ADD SOME COMMENTARY ABOUT DISTRIBUTION DIFFERENCE**
 
-3. (30 points) Propose a model for the prediction. Give a few reasons for
-your selection briefly. You may choose to model the problem as classification or regression. Define the task, experience and performance criteria.
-4. (30 points) Do 10 fold cross validation in the experiment.
-5. (20 points) Report your results.
-6. (Bonus 20 points) Other researchers have built predictive models using
-this data. Do a brief comparison of your results with the result in the following paper: http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
+But more importantly, let's see if our reshaped data gives us a better model.
+\newpage
+
+# Appendix 1 - Model code
+
+This function has been coded **only** to run and evaluate the classification 
+algorithm.  It doesn't actually return the models that are developed - it only 
+returns the predictions for the final model and each of the intermdiate models. 
+If the actual models are needed, it's a fairly trivial change to actually return 
+them.
+
+```{r appendix1}
+# Helper function to get mode of a vector
+getMode
+
+# Main code, including test set evaluation algorithm
+ensemble_eval
+```
+
+\newpage
+
+# Appendix 2 - Over/Under Sample and Multiclass SMOTE Algorithm code
+
+Pseudocode for the wrapper, undersample & undersample algorithms can be found
+in the Chawla et al "Automatically Countering Imbalance".
+
+Psudocode for the SMOTE algorithm can be found in Chawla et al "SMOTE Synthetic 
+Minority Over-sampling"
+
+```{r appendix2}
+wrapper
+
+wrap_undersample
+
+undersample
+
+wrap_smote
+
+smote_sample
+
+smote
+
+populate
+
+# Custom evaluation function
+evaluate_model
+```
+
+\newpage
+
+# Bibliography
+
+Chawla NV, Cieslak DA, Bowyer KW, Kegelmeyer WP SMOTE Synthetic Minority 
+Over-sampling TEchnique Journal of Artificial Intelligence Research. 
+2002;16:341-78
+
+Chawla NV, Cieslak DA, Hall LO, Joshi A. Automatically countering imbalance and 
+its empirical relationship to cost. Data Mining and Knowledge Discovery.
+2008;17(2):225-52.
+
+Cortez P, Cerdeira A, Almeida F, Matos T, Reis J. Modeling wine preferences by 
+data mining from physicochemical properties. Decision Support Systems. 
+2009;47(4):547-53.
+
+Qian Y et al., A resampling ensemble algorithm for classification of imbalance 
+problems, Neurocomputing (2014), http://dx.doi.org/10.1016/j.neucom.2014.06.021i
+
+Rokach L. Ensemble-based classifiers. Artificial Intelligence Review. 
+2010;33(1):1-39.

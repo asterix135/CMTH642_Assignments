@@ -1,22 +1,21 @@
 # Function to use in final
 
+getMode <- function(vect) {
+    unq_vect <- unique(vect)
+    return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
+}
+
 ensemble_eval <- function(train_set, test_set = NULL) {
     # Input - training set
     # Output - list of final predictions, intermediate models & normalizer
     # note - model is hard-coded to use quality as output variable
 
-    getMode <- function(vect) {
-        unq_vect <- unique(vect)
-        return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
-    }
-    
     evaluate_test <- function(model_list, test_set) {
         # 1. apply normalization model
         test_set <- predict(model_list[[7]], test_set)
         # 2-3 run base models and create interim result data frame
         ensemble_data <- data.frame(matrix(NA, nrow=nrow(test_set), ncol=0))
         for (i in 2:6) {
-            print(i)
             new_pred <- predict(model_list[[i]], test_set)
             ensemble_data <- cbind(ensemble_data, new_pred)
         }
@@ -24,6 +23,7 @@ ensemble_eval <- function(train_set, test_set = NULL) {
         # 4. apply modal selection to interim data frame
         test_pred <- apply(ensemble_data, 1, function(x) getMode(x))
         ensemble_data <- cbind(final = test_pred, ensemble_data)
+        
         return(ensemble_data)
     }    
     
@@ -84,13 +84,7 @@ ensemble_eval <- function(train_set, test_set = NULL) {
     final_pred <- apply(ensemble_data, 1, function(x) getMode(x))
     
     if (missing(test_set)) {
-            return(list(final_model = final_pred,
-                    mn_model = mn_model,
-                    nb_model = nb_model,
-                    rf_model = rf_model,
-                    gbm_model = gbm_model,
-                    lda_model = lda_model,
-                    norm_obj = norm_obj))
+            return(cbind(final = final_pred, ensemble_data))
     } else {
         return(evaluate_test(list(final_model = final_pred,
                                   mn_model = mn_model,

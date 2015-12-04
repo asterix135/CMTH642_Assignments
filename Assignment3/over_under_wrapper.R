@@ -11,8 +11,6 @@ wrapper <- function(class_list, train_set, eval_fun, seed=FALSE) {
     require(caret)
     require(FNN)
 
-    # num_class <- length(class_list)
-    
     # class_data will manage information on classes
     class_data <- data.frame(rbind(orig = class_list))
     colnames(class_data) <- names(class_list)
@@ -30,7 +28,11 @@ wrapper <- function(class_list, train_set, eval_fun, seed=FALSE) {
     class_data <- rbind(class_data, 
                         base_f = evaluate_model(eval_fun, train_set))
     class_data <- rbind(class_data, best_f = class_data['base_f',])
-    
+
+    # set copy of original data to use in testing model from shaped data
+    # when we get to smote loop
+    original_data <- train_set
+        
     # Run undersample loop
     if (sum(class_data['maj',]) > 0) {
         new_list <- wrap_undersample(class_data, train_set, eval_fun, seed)
@@ -40,10 +42,11 @@ wrapper <- function(class_list, train_set, eval_fun, seed=FALSE) {
     }
     # Run smote loop
     if (sum(class_data['min',]) > 0) {
-        new_list <- wrap_smote(class_data, train_set, eval_fun, seed)
+        new_list <- wrap_smote(class_data, train_set, original_data, 
+                               eval_fun, seed)
         train_set <- new_list[[1]]; class_data <- new_list[[2]];
     }
-    return(list(class_data, train_set))
+    return(train_set)
 }
 
 
@@ -51,6 +54,9 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
     # returns list
     # element 1: updated class_data
     # element 2: updated train_data
+    
+    # copy train_data to use in evaluating models
+    original <- train_data
     
     # Set StopSampling Flag to False
     class_data <- rbind(class_data, stop_sampling = !class_data['maj',])
@@ -72,6 +78,7 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
                 print(train_len)
                 
                 updated <- undersample(train_data, 
+                                       original,
                                        colnames(class_data)[i],
                                        class_data,
                                        eval_fun,
@@ -96,7 +103,7 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
 }
 
 
-undersample <- function(train_data, class_val, class_data, 
+undersample <- function(train_data, original, class_val, class_data, 
                         eval_fun, seed=FALSE) {
     sample_decrement <- 0.1
     increment_minimum <- 0.05
@@ -112,7 +119,7 @@ undersample <- function(train_data, class_val, class_data,
     # evaluate f-values for new data set
     # return new data unless decrease minority values or decrease majority 
     #   values by more than increment_minimum
-    new_f <- evaluate_model(eval_fun, new_train)
+    new_f <- evaluate_model(eval_fun, new_train, original)
     for (i in 1:ncol(class_data)) {
         if (class_data['orig', i] != -1 & 
             ((class_data['best_f',i] - new_f[i]) / 
@@ -132,7 +139,7 @@ undersample <- function(train_data, class_val, class_data,
 }
 
 
-wrap_smote <- function(class_data, train_data, eval_fun, seed=FALSE) {
+wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
     # returns new training data set
     # element 1: updated class_data
     # element 2: updated train_data
@@ -157,6 +164,7 @@ wrap_smote <- function(class_data, train_data, eval_fun, seed=FALSE) {
                 print(train_len)
                 
                 updated <- smote_sample(train_data, 
+                                        original,
                                         colnames(class_data)[i],
                                         class_data,
                                         eval_fun,
@@ -178,7 +186,7 @@ wrap_smote <- function(class_data, train_data, eval_fun, seed=FALSE) {
 }
 
 
-smote_sample <- function(train_data, class_val, class_data, 
+smote_sample <- function(train_data, original, class_val, class_data, 
                          eval_fun, seed=FALSE) {
     increment_minimum <- 0.05
     other_classes <- train_data[train_data[,ncol(train_data)] != class_val,]
@@ -187,7 +195,7 @@ smote_sample <- function(train_data, class_val, class_data,
     synth_class <- smote(curr_class, train_data, seed)
     
     # Evaluate if new model improves f-values by at least 5%
-    new_f <- evaluate_model(eval_fun, rbind(train_data, synth_class))
+    new_f <- evaluate_model(eval_fun, rbind(train_data, synth_class), original)
     print('new_f')
     print(new_f)
     class_col <- paste('Class:', class_val)
@@ -256,30 +264,18 @@ populate <- function(class_rep, near_nbrs, k) {
 }
 
 
-# This isn't the best - need to build model with synthetic/undersampled
-# data and then predict on original data set to get accurate values
-evaluate_model <- function(eval_fun, data_set) {
-    # runs prediction model & returns vector of class f values
-    # assumes prediction model returns a list with first element as predictors
-    # can be simplified if just using a simple model
-    cm <- confusionMatrix(eval_fun(data_set)[[1]], data_set[,ncol(data_set)])
-    f_vals <- (2 * cm$byClass[,1] * cm$byClass[,3]) / 
-        (cm$byClass[,1] + cm$byClass[,3])
-    return(f_vals)
-}
-
-evaluate_model2 <- function(eval_fun, train_set, test_set = NULL) {
+evaluate_model <- function(eval_fun, train_set, test_set = NULL) {
     # runs prediction model & returns vector of class f values
     # assumes prediction model returns a list with first element as predictors
     # can be simplified if just using a simple model
     if (missing(test_set)) {    
-        cm <- confusionMatrix(eval_fun(data_set)[[1]], data_set[,ncol(data_set)])
-        f_vals <- (2 * cm$byClass[,1] * cm$byClass[,3]) / 
-            (cm$byClass[,1] + cm$byClass[,3])
-        return(f_vals)
+        cm <- confusionMatrix(eval_fun(train_set)$final, 
+                              train_set[,ncol(train_set)])
     } else {
-        mod1 <- eval_fun(train_set, test_set)
-        
+        cm <- confusionMatrix(eval_fun(train_set, test_set)$final,
+                              test_set[,ncol(test_set)])
     }
-    
+    f_vals <- (2 * cm$byClass[,1] * cm$byClass[,3]) / 
+        (cm$byClass[,1] + cm$byClass[,3])
+    return(f_vals)
 }
