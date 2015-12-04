@@ -1,16 +1,31 @@
-# For Testing
-
 # Function to use in final
-getMode <- function(vect) {
-    unq_vect <- unique(vect)
-    return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
-}
-
 
 ensemble_eval <- function(train_set, test_set = NULL) {
     # Input - training set
     # Output - list of final predictions, intermediate models & normalizer
     # note - model is hard-coded to use quality as output variable
+
+    getMode <- function(vect) {
+        unq_vect <- unique(vect)
+        return(unq_vect[which.max(tabulate(match(vect, unq_vect)))])
+    }
+    
+    evaluate_test <- function(model_list, test_set) {
+        # 1. apply normalization model
+        test_set <- predict(model_list[[7]], test_set)
+        # 2-3 run base models and create interim result data frame
+        ensemble_data <- data.frame(matrix(NA, nrow=nrow(test_set), ncol=0))
+        for (i in 2:6) {
+            print(i)
+            new_pred <- predict(model_list[[i]], test_set)
+            ensemble_data <- cbind(ensemble_data, new_pred)
+        }
+        colnames(ensemble_data) <- c('mn', 'nb', 'rf', 'gbm', 'lda')
+        # 4. apply modal selection to interim data frame
+        test_pred <- apply(ensemble_data, 1, function(x) getMode(x))
+        ensemble_data <- cbind(final = test_pred, ensemble_data)
+        return(ensemble_data)
+    }    
     
     # Set parameters for modedl build
     fit_control <- trainControl(## 10-fold CV
@@ -86,22 +101,4 @@ ensemble_eval <- function(train_set, test_set = NULL) {
                                   norm_obj = norm_obj),
                              test_set))
     }
-}
-
-
-evaluate_test <- function(model_list, test_set) {
-    # 1. apply normalization model
-    test_set <- predict(model_list[[7]], test_set)
-    # 2-3 run base models and create interim result data frame
-    ensemble_data <- data.frame(matrix(NA, nrow=nrow(test_set), ncol=0))
-    for (i in 2:6) {
-        print(i)
-        new_pred <- predict(model_list[[i]], test_set)
-        ensemble_data <- cbind(ensemble_data, new_pred)
-    }
-    colnames(ensemble_data) <- c('mn', 'nb', 'rf', 'gbm', 'lda')
-    # 4. apply modal selection to interim data frame
-    test_pred <- apply(ensemble_data, 1, function(x) getMode(x))
-    ensemble_data <- cbind(final = test_pred, ensemble_data)
-    return(ensemble_data)
 }

@@ -268,14 +268,18 @@ evaluate_model <- function(eval_fun, data_set) {
     return(f_vals)
 }
 
-evaluate_model2 <- function(eval_fun, train_set, test_set = train_set) {
+evaluate_model2 <- function(eval_fun, train_set, test_set = NULL) {
     # runs prediction model & returns vector of class f values
     # assumes prediction model returns a list with first element as predictors
     # can be simplified if just using a simple model
+    if (missing(test_set)) {    
+        cm <- confusionMatrix(eval_fun(data_set)[[1]], data_set[,ncol(data_set)])
+        f_vals <- (2 * cm$byClass[,1] * cm$byClass[,3]) / 
+            (cm$byClass[,1] + cm$byClass[,3])
+        return(f_vals)
+    } else {
+        mod1 <- eval_fun(train_set, test_set)
         
-    cm <- confusionMatrix(eval_fun(data_set)[[1]], data_set[,ncol(data_set)])
-    f_vals <- (2 * cm$byClass[,1] * cm$byClass[,3]) / 
-        (cm$byClass[,1] + cm$byClass[,3])
-    return(f_vals)
+    }
     
 }
