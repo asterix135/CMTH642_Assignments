@@ -62,21 +62,9 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
     class_data <- rbind(class_data, stop_sampling = !class_data['maj',])
     # main loop
     while (sum(class_data['stop_sampling',]) < ncol(class_data)) {
-        
-        print('classes to go')
-        print(sum(class_data['stop_sampling',]))
-        
         for (i in 1:ncol(class_data)) {
-            
-            print('i')
-            print(i)
-            
             if (class_data['stop_sampling',i] == FALSE) {
                 train_len = nrow(train_data)
-                
-                print('train len')
-                print(train_len)
-                
                 train_data <- undersample(train_data, 
                                           original,
                                           colnames(class_data)[i],
@@ -88,15 +76,10 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
                 }
             }
         }
-        
-        print('new df')
-        print(nrow(train_data))
-        
         # update best f_values for new model
         new_f <- evaluate_model(eval_fun, train_data)
         class_data['best_f',] <- pmax(as.numeric(class_data['best_f',]), new_f)
     }
-    
     return(list(train_data, class_data))
 }
 
@@ -118,9 +101,6 @@ undersample <- function(train_data, original, class_val, class_data,
     # return new data unless decrease minority values or decrease majority 
     #   values by more than increment_minimum
     new_f <- evaluate_model(eval_fun, new_train, original)
-    
-    print(new_f)
-    
     for (i in length(new_f)) {
         if (is.nan(new_f[i])) {
             new_f[i] <- 0
@@ -151,21 +131,9 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
     class_data <- rbind(class_data, lookup_ahead = 1)
     # main loop
     while (sum(class_data['stop_sampling',]) < ncol(class_data)) {
-        
-        print('classes to go')
-        print(sum(class_data['stop_sampling',]))
-        
         for (i in 1:ncol(class_data)) {
-            
-            print('i')
-            print(i)
-            
             if (class_data['stop_sampling',i] == FALSE) {
                 train_len = nrow(train_data)
-                
-                print('train len')
-                print(train_len)
-                
                 smote_results <- smote_sample(train_data, 
                                               original,
                                               colnames(class_data)[i],
@@ -177,8 +145,6 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
                 if (nrow(train_data) == train_len) {
                     class_data['stop_sampling',i] <- TRUE
                 }
-            print('new df')
-            print(nrow(train_data))
             }
         }
         # update best f_values for new model
@@ -205,19 +171,12 @@ smote_sample <- function(train_data, original, class_val, class_data,
             new_f[i] <- 0
         }
     }
-    
-    print('new_f')
-    print(new_f)
-    print('lookup')
-    print(class_data['lookup_ahead', class_val])
     if (mean(new_f[class_data['orig',] == -1]) < 
         (1 + increment_minimum) *
         mean(as.numeric(class_data['best_f',class_data['orig',] == -1]))) {
         if(class_data['lookup_ahead',class_val] < lookup_ahead_value) {
             class_data['lookup_ahead',class_val] <- 
                 class_data['lookup_ahead', class_val] + 1
-            print('new_lookup')
-            print(class_data['lookup_ahead',class_val])
             return (list(rbind(train_data, synth_class), class_data))
         } else {
             return (list(train_data, class_data))
