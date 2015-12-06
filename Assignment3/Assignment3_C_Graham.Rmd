@@ -8,21 +8,37 @@ output: pdf_document
 # Overview **NEED TO REWRITE**
 
 This assignment develops a model to predict a subjective quality rating on 
-Portuguese red vinho verdes.  The data is provided at
+Portuguese red vinho verde wines, and to compare our results with those 
+obtained by the original paper to work with the data.
+
+We instigated two main changes over the original paper's approach: applying an 
+ensemble learning model to the data, and using an undersampling/SMOTE
+oversamling algorithm to deal with class imbalance in the data.
+
+.  The data is provided at
 https://archive.ics.uci.edu/ml/datasets/Wine+Quality and was originally used for
 the paper "Modeling wine preferences by data mining from physicochemical
 properties" available at
 http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
 
-The data set provides provides 11 chemical measurements of Portuges red wines,
+The data set provides provides 11 chemical measurements of Portuguese red wines,
 and one quality score assigned by human testers.  The data is complete and
 clean.  Pre-processing is described in the original paper.
 
 Our goal is to develop a model that will predict the quality rating of a wine
-based on these chemical measurements.  Numbered sections of this paper 
-correspond to the numbered instructions in the assignment sheet.
+based on these chemical measurements.  
 
 # 1. Import and Split Data
+
+The data is provided at
+https://archive.ics.uci.edu/ml/datasets/Wine+Quality and was originally used for
+the paper "Modeling wine preferences by data mining from physicochemical
+properties" available at
+http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
+
+The data set provides provides 11 chemical measurements of Portuguese red wines,
+and one quality score assigned by human testers.  The data is complete and
+clean.  Pre-processing is described in the original paper.
 
 ```{r load, message = FALSE}
 # load all libraries required in analysis
@@ -91,7 +107,7 @@ model.  We  provide a strategy for dealing with this below, but first will
 look at some other characteristics of the data.
 
 ```{r qual histogram}
-ggplot(testing, aes(x=quality)) +
+ggplot(training, aes(x=quality)) +
     geom_histogram(color='black', fill='white') +
     ggtitle('Distribution of Quality Scores') +
     xlab('Quality Score')
@@ -174,7 +190,7 @@ So, we need to turn briefly to model selection.
 
 As noted on the source page for this data set, the data lends itself to either
 a regression or classification approach.  The original paper to use this data
-set adopted a regression appraoch to the data, arguing that regression allows us
+set adopted a regression approach to the data, arguing that regression allows us
 to better evaluate "near miss" predictions (e.g. if the true value is 3, we can
 up-score the model if it predicts 4, rather than 7).  The paper used both Neural
 Network (NN) and Support Vector Machine (SVM) models, and obtained an accuracy
@@ -211,7 +227,7 @@ sampling function will evaluate performance based on the model's f-statistic
     f-measure = \frac{2 * precision * recall}{recall + precision}
 \]
 
-The f-stastic is a good overall performance measure, balancing precision and
+The f-statistic is a good overall performance measure, balancing precision and
 recall.  We will therefore look at the f-stat for non-average-rated wines.  This 
 will give us a better understanding of how well our model identifies bad or 
 excellent wines.  For the purposes of this analysis, we define non-average-rated
@@ -233,7 +249,7 @@ Rokach L. Ensemble-based classifiers. Artificial Intelligence Review.
 
 In terms of specific ensemble learning implementation, we are going to use the
 approach suggested by Jeff Leek of John's Hopkins in the Coursera course 
-"Practial Machine Learning"^[Course notes available at: http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machine_Learning_Course_Notes.pdf, starting on p. 67].  This is essentially a stacking
+"Practical Machine Learning"^[Course notes available at: http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machine_Learning_Course_Notes.pdf, starting on p. 67].  This is essentially a stacking
 algorithm.
 
 In order to build an ensemble model, we first need to build a number of
@@ -279,21 +295,21 @@ As a baseline, before dealing with the class imbalance, let's see how our
 model performs:
 
 ```{r inital results, cache=TRUE, message=FALSE, warning=FALSE}
-# First, get the final and interim model results
+# First, get the predictions for the training set
 base_results <- ensemble_eval(training)
 ```
 
 ```{r cm base combo}
-# complete confusion matrix for final model
+# complete confusion matrix for training data
 cm <- confusionMatrix(base_results[[1]], training$quality)
 cm
 ```
 
 The model gives us a pretty good result overall, with a predicted 71% accuracy 
-on the training data, better than the 64% accuracy (at a 0.5 threshhold) from 
+on the training data, better than the 64% accuracy (at a 0.5 threshold) from 
 the original paper.  
 
-The f-stats for the minority classes (3,4,7 and 8), however, are noticably
+The f-stats for the minority classes (3,4,7 and 8), however, are noticeably
 better for our base model than for the original paper:^[Note that because the
 original paper predicted 0 true positives for class 3 and class 8, the f-stat
 for each of those is technically NaN.  I have substituted with zero to compare.]
@@ -315,6 +331,15 @@ paper_f <- mean(c(0, 0, (2*(1/53)*(1/5))/(1/53+1/5),
 f_stat; paper_f
 ```
 
+```{r comparison data frame}
+# Store results for various models in a data frame for easy comparison
+model_summary <- data.frame(model = c('paper', 'base_train'), 
+                            accuracy = c(0.64, cm$overall[1]), 
+                            f_stat = c(paper_f, f_stat),
+                            stringsAsFactors = FALSE)
+
+```
+
 ## Baseline against test set
 
 As a test, we'll apply this model to the test data and see if our results are
@@ -333,13 +358,21 @@ test_f <- mean(c(0,0,0,(2*cm2$byClass[5,1] * cm2$byClass[5,3])/ (cm2$byClass[5,1
 test_f
 ```
 
-When we apply our model to the testing set, we see a relatively significant
-degredation in performance - essentially to the level of the original paper,
-likely indicating some overfitting.
+```{r result update 1}
+# Update results table
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[3,1] <-'base_test'
+model_summary[3,2] <- cm2$overall[2]
+model_summary[3,3] <- test_f
+```
 
-Importantly, our model is doing a very poor job at predicting minority classes; 
-especially quality ratings of 3, 4, and 8, which have the weakest representation
-in our data.
+When we apply our model to the testing set, we see a relatively significant
+degradation in performance - essentially to the level of the original paper,
+likely indicating some overfitting in the test results.
+
+Importantly, our model is doing a very poor job at predicting minority classes
+in the test set -- especially quality ratings of 3, 4, and 8, which have the
+weakest representation in our data.
 
 So, in an effort to improve on this, we need to turn to our function for 
 undersampling and SMOTE oversampling.
@@ -347,22 +380,26 @@ undersampling and SMOTE oversampling.
 # Undersampling/SMOTE oversampling implementation
 
 As discussed earlier, I have decided to implement the "Wrapper Undersample
-SMOTE Algorithm" developed by Chawla et al as a way to rebalance the provided
+SMOTE Algorithm" developed by Chawla et al as a way to re-balance the provided
 data.
 
 Simplified, the algorithm works as follows:
 
 1) Establish a baseline performance level for each majority and minority class
 2) For each Majority class, undersample by 10% until either minority class
-predictions stop improving, or until majority class predections degrade by 5%.
+predictions stop improving, or until majority class predictions degrade by 5%.
 3) For each Minority class, SMOTE oversample by 100%, and continue this 
 until that minority class performance is increased by less than 5%.
 
 The specific R code for my implementation is shown in Appendix 2.  The
 algorithm returns a reshaped data set that will be used to generate our
-final predictive model.
+final predictive model.^[Because I don't have a great grasp of how R memory
+allocation works, I was unable to run this through the RMD file, as my laptop
+ran out of memory in executing the algorithm.  Instead I ran the code through 
+R's console, saved the final data set to disk and loaded it into the RMD file 
+for further manipulation.]
 
-```{r reshape, cache=TRUE, warning=FALSE, message=FALSE}
+```{r reshape, eval=FALSE}
 # algorithm needs a named vector of class categories
 #       with -1 = minority; 1 = majority; 0 = neutral
 class_list <- c(-1,-1,1,1,0,-1)
@@ -371,31 +408,75 @@ new_training <- wrapper(class_list = class_list, train_set = training,
                         eval_fun = ensemble_eval, seed=TRUE)
 ```
 
+```{r load reshaped, echo=FALSE}
+new_training <- read.csv('reshaped.csv', row.names = 1)
+new_training$quality <- as.factor(new_training$quality)
+```
+
 First, let's see how our new distribution compares to the original training
 data:
 
 ```{r examine new}
-hist(training$quality, col=rgb(1,0,0,0.5),
-     main="Original vs. Reshaped Quality Distribution", 
-     xlab="Quality Rating")
-hist(new_training, col=rgb(0,0,1,0.5), add=T)
-legend("topright",
-       c("Original", "Reshaped"),
-       col=c(rgb(1,0,0,0.5), rgb(0,0,1,0.5)),
+barplot(rbind(table(training$quality), 
+              table(new_training$quality)), 
+        main = 'Comparison of reshaped & original data',
+        xlab = 'Quality Rating',
+        col = c('darkblue', 'red'),
+        beside=TRUE)
+legend('topright', c('original', 'reshaped'), 
+       col = c('darkblue', 'red'), 
        lwd=10)
 box()
 ```
 
-# **ADD SOME COMMENTARY ABOUT DISTRIBUTION DIFFERENCE**
+The changes appear to have been fairly minor, with no oversampling at all for
+a quality rating of four.  That mean we would have seen maximum impact on 
+our f-statistics after one or two iterations of undersamling or oversampling.
 
 But more importantly, let's see if our reshaped data gives us a better model.
+We will look at how the model works for both our original training data, and
+how well it applies to the testing data set.
+
+```{r new model training, cache=TRUE, warning=FALSE, message=FALSE}
+new_train_results <- ensemble_eval(new_training, training)
+```
+
+```{r new model testing, cache=TRUE, warning=FALSE, message=FALSE}
+new_test_results <- ensemble_eval(new_training, testing)
+```
+
+```{r update and display final results comparison}
+cm3 <- confusionMatrix(new_train_results$final, training$quality)
+cm4 <- confusionMatrix(new_test_results$final, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3), rep(NA,3))
+model_summary[4,1] <- 'reshaped_train'
+model_summary[5,1] <- 'reshaped_test'
+model_summary[4,2] <- cm3$overall[1]
+model_summary[5,2] <- cm4$overall[2]
+f_stat <- NULL
+for (i in c(1,2,5,6)) {
+    f_stat<- c(f_stat, 
+               (2 * cm3$byClass[i,1] * cm3$byClass[i,3]) / 
+                   (cm3$byClass[i,1] + cm3$byClass[i,3]))
+}
+model_summary[4,3] <- mean(f_stat)
+f_stat <- NULL
+for (i in c(1,2,5,6)) {
+    f_stat<- c(f_stat, 
+               (2 * cm4$byClass[i,1] * cm4$byClass[i,3]) / 
+                   (cm4$byClass[i,1] + cm4$byClass[i,3]))
+}
+model_summary[5,3] <- mean(f_stat)
+model_summary
+```
+
 \newpage
 
 # Appendix 1 - Model code
 
 This function has been coded **only** to run and evaluate the classification 
 algorithm.  It doesn't actually return the models that are developed - it only 
-returns the predictions for the final model and each of the intermdiate models. 
+returns the predictions for the final model and each of the intermediate models. 
 If the actual models are needed, it's a fairly trivial change to actually return 
 them.
 
@@ -414,7 +495,7 @@ ensemble_eval
 Pseudocode for the wrapper, undersample & undersample algorithms can be found
 in the Chawla et al "Automatically Countering Imbalance".
 
-Psudocode for the SMOTE algorithm can be found in Chawla et al "SMOTE Synthetic 
+Pseudocode for the SMOTE algorithm can be found in Chawla et al "SMOTE Synthetic 
 Minority Over-sampling"
 
 ```{r appendix2}

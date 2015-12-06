@@ -77,14 +77,12 @@ wrap_undersample <- function(class_data, train_data, eval_fun, seed=FALSE) {
                 print('train len')
                 print(train_len)
                 
-                updated <- undersample(train_data, 
-                                       original,
-                                       colnames(class_data)[i],
-                                       class_data,
-                                       eval_fun,
-                                       seed)
-                train_data <- updated[[1]]
-                class_data <- updated[[2]]
+                train_data <- undersample(train_data, 
+                                          original,
+                                          colnames(class_data)[i],
+                                          class_data,
+                                          eval_fun,
+                                          seed)
                 if (nrow(train_data) == train_len) {
                     class_data['stop_sampling',i] <- TRUE
                 }
@@ -120,22 +118,21 @@ undersample <- function(train_data, original, class_val, class_data,
     # return new data unless decrease minority values or decrease majority 
     #   values by more than increment_minimum
     new_f <- evaluate_model(eval_fun, new_train, original)
-    for (i in 1:ncol(class_data)) {
-        if (class_data['orig', i] != -1 & 
-            ((class_data['best_f',i] - new_f[i]) / 
-             class_data['best_f',i] > increment_minimum)) {
-            return(list(train_data, class_data))
-        } else if (class_data['min', i] & 
-                   (class_data['best_f', i] > new_f[i])) {
-            return(list(train_data, class_data))
-        } else {
-#             class_data['best_f',] <- pmax(as.numeric(class_data['best_f',]), 
-#                                           new_f) 
-            return(list(new_train, class_data))
+    for (i in length(new_f)) {
+        if (is.nan(new_f[i])) {
+            new_f[i] <- 0
         }
     }
-    # Can probably delete this
-    return(list(new_train, class_data))
+    if (mean(new_f[class_data['orig',] == 1]) < 
+        (1 - increment_minimum) * mean(class_data['best_f', 
+                                                  class_data['orig',] == 1])) {
+        return(train_data)
+    } else if (mean(new_f[class_data['orig',] == -1]) < 
+               mean(class_data['best_f', class_data['orig',] == -1])) {
+        return(train_data)
+    } else {
+        return(new_train)
+    }
 }
 
 
@@ -146,6 +143,8 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
 
     # Set StopSampling Flag to False
     class_data <- rbind(class_data, stop_sampling = !class_data['min',])
+    # Set LookupAhead value to 1
+    class_data <- rbind(class_data, lookup_ahead = 3)
     # main loop
     while (sum(class_data['stop_sampling',]) < ncol(class_data)) {
         
@@ -163,14 +162,14 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
                 print('train len')
                 print(train_len)
                 
-                updated <- smote_sample(train_data, 
-                                        original,
-                                        colnames(class_data)[i],
-                                        class_data,
-                                        eval_fun,
-                                        seed)
-                train_data <- updated[[1]]
-                class_data <- updated[[2]]
+                smote_results <- smote_sample(train_data, 
+                                              original,
+                                              colnames(class_data)[i],
+                                              class_data,
+                                              eval_fun,
+                                              seed)
+                train_data <- smote_results[[1]]
+                class_data <- smote_results[[2]]
                 if (nrow(train_data) == train_len) {
                     class_data['stop_sampling',i] <- TRUE
                 }
@@ -189,34 +188,36 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
 smote_sample <- function(train_data, original, class_val, class_data, 
                          eval_fun, seed=FALSE) {
     increment_minimum <- 0.05
+    lookup_ahead_value <- 3
     other_classes <- train_data[train_data[,ncol(train_data)] != class_val,]
     curr_class <- train_data[train_data[,ncol(train_data)] == class_val,]
-
+    
     synth_class <- smote(curr_class, train_data, seed)
     
     # Evaluate if new model improves f-values by at least 5%
     new_f <- evaluate_model(eval_fun, rbind(train_data, synth_class), original)
+    for (i in length(new_f)) {
+        if (is.nan(new_f[i])) {
+            new_f[i] <- 0
+        }
+    }
+    
     print('new_f')
     print(new_f)
-    class_col <- paste('Class:', class_val)
-    if ((new_f[class_col] - class_data['best_f', as.character(class_val)]) /
-        class_data['best_f', as.character(class_val)] < increment_minimum) {
-#         
-#     }
-#     
-#     for (i in 1: nrow(class_data)) {
-#         if (class_data['min', i] & 
-#             ((new_f[i] - class_data['best_f',i]) / 
-#              class_data['best_f',i] < increment_minimum)) {
-        return(list(train_data, class_data))
+    
+    if (mean(new_f[class_data['orig',] == -1]) < 
+        (1 + increment_minimum) * mean(class_data['best_f', 
+                                                  class_data['orig',] == -1])) {
+        if(class_data['lookup_ahead',class_val] < lookup_ahead_value) {
+            class_data['lookup_ahead',class_val] <- 
+                class_data['lookup_ahead', class_val] + 1
+            return (list(rbind(train_data, synth_class), class_data))
+        } else {
+            return (list(train_data, class_data))
+        }
     } else {
-        return(list(rbind(train_data, synth_class), class_data))
-#         class_data['best_f',] <- pmax(as.numeric(class_data['best_f',]), 
-#                                       new_f) 
+        return (list(rbind(train_data, synth_class), class_data))
     }
-#    }
-    # Can get rid of this
-    return(list(rbind(train_data, synth_data), class_data))
 }
 
 
