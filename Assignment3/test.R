@@ -19,8 +19,8 @@ smote_sample <- function(train_data, original, class_val, class_data,
     print(new_f)
     
     if (mean(new_f[class_data['orig',] == -1]) < 
-        (1 + increment_minimum) * mean(class_data['best_f', 
-                                                  class_data['orig',] == -1])) {
+        (1 + increment_minimum) *
+            mean(as.numeric(class_data['best_f',class_data['orig',] == -1]))) {
         if(class_data['lookup_ahead',class_val] < lookup_ahead_value) {
             class_data['lookup_ahead',class_val] <- 
                 class_data['lookup_ahead', class_val] + 1

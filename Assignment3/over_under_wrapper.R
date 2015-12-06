@@ -118,17 +118,21 @@ undersample <- function(train_data, original, class_val, class_data,
     # return new data unless decrease minority values or decrease majority 
     #   values by more than increment_minimum
     new_f <- evaluate_model(eval_fun, new_train, original)
+    
+    print(new_f)
+    
     for (i in length(new_f)) {
         if (is.nan(new_f[i])) {
             new_f[i] <- 0
         }
     }
     if (mean(new_f[class_data['orig',] == 1]) < 
-        (1 - increment_minimum) * mean(class_data['best_f', 
-                                                  class_data['orig',] == 1])) {
+        (1 - increment_minimum) * 
+            mean(as.numeric(class_data['best_f', class_data['orig',] == 1]))) {
         return(train_data)
     } else if (mean(new_f[class_data['orig',] == -1]) < 
-               mean(class_data['best_f', class_data['orig',] == -1])) {
+               mean(as.numeric(class_data['best_f', 
+                                          class_data['orig',] == -1]))) {
         return(train_data)
     } else {
         return(new_train)
@@ -144,7 +148,7 @@ wrap_smote <- function(class_data, train_data, original, eval_fun, seed=FALSE) {
     # Set StopSampling Flag to False
     class_data <- rbind(class_data, stop_sampling = !class_data['min',])
     # Set LookupAhead value to 1
-    class_data <- rbind(class_data, lookup_ahead = 3)
+    class_data <- rbind(class_data, lookup_ahead = 1)
     # main loop
     while (sum(class_data['stop_sampling',]) < ncol(class_data)) {
         
@@ -204,13 +208,16 @@ smote_sample <- function(train_data, original, class_val, class_data,
     
     print('new_f')
     print(new_f)
-    
+    print('lookup')
+    print(class_data['lookup_ahead', class_val])
     if (mean(new_f[class_data['orig',] == -1]) < 
-        (1 + increment_minimum) * mean(class_data['best_f', 
-                                                  class_data['orig',] == -1])) {
+        (1 + increment_minimum) *
+        mean(as.numeric(class_data['best_f',class_data['orig',] == -1]))) {
         if(class_data['lookup_ahead',class_val] < lookup_ahead_value) {
             class_data['lookup_ahead',class_val] <- 
                 class_data['lookup_ahead', class_val] + 1
+            print('new_lookup')
+            print(class_data['lookup_ahead',class_val])
             return (list(rbind(train_data, synth_class), class_data))
         } else {
             return (list(train_data, class_data))

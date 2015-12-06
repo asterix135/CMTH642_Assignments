@@ -13,20 +13,14 @@ obtained by the original paper to work with the data.
 
 We instigated two main changes over the original paper's approach: applying an 
 ensemble learning model to the data, and using an undersampling/SMOTE
-oversamling algorithm to deal with class imbalance in the data.
+oversamling algorithm to deal with class imbalance in the data.  The results
+of the undersampling/SMOTE oversampling algorithm are contrasted with the
+results of the original paper, as well as a much cruder approach to over/
+under sampling.
 
-.  The data is provided at
-https://archive.ics.uci.edu/ml/datasets/Wine+Quality and was originally used for
-the paper "Modeling wine preferences by data mining from physicochemical
-properties" available at
-http://repositorium.sdum.uminho.pt/bitstream/1822/10029/1/wine5.pdf
+**SUMMARY OF CONCLUSIONS**
 
-The data set provides provides 11 chemical measurements of Portuguese red wines,
-and one quality score assigned by human testers.  The data is complete and
-clean.  Pre-processing is described in the original paper.
 
-Our goal is to develop a model that will predict the quality rating of a wine
-based on these chemical measurements.  
 
 # 1. Import and Split Data
 
@@ -97,8 +91,8 @@ clear.  We'll see if we can make sense of it with some machine learning.
 
 ## Class Balance
 
-But the data isn't perfect.  The biggest problem is with the 
-distribution of quality scores.  Specifically, over 80% of the wines have 
+There is a significant concern with the distribution of quality scores in the
+data set.  Specifically, over 80% of the wines have 
 average ratings (5 or 6), and very few wines get ratings at the more extreme
 ends of the rating spectrum.  (3 and 8 are the extreme values awarded, even
 though wines were rated on a 10-point scale).  Class imbalance has been
@@ -136,13 +130,16 @@ What this preliminary exploration tells us is:
 
 - None of the variables show near zero variability, meaning there is no 
 *prima facie* reason to exclude any at the start of our analysis
+
 - For the most part, there does not seem to be a huge amount of collinearity
 between variables.  There are some instances of collinearity, where it might be
 expected (citric.acid, fixed.acidity and pH), (free.sulfur.dioxide and
 total.sulfur.dioxide).  So there may be some room to reduce dimensionality.
+However, we will not be doing that in this particular analysis.
+
 - There are some clear relationships between some of the predictor variables 
-and wine quality.  volatile.acidity, alcohol and density seem particularly
-important.
+and wine quality.  The variables volatile.acidity, alcohol and density seem
+particularly important.
 
 ## Strategies for dealing with Class Imbalance in Provided Data
 
@@ -207,7 +204,7 @@ probably makes most sense.
 But Assignment 1 was based around regression, and I'd like to make this one a
 bit more challenging, so I'm going to frame it as a classification problem.
 This means the fairest comparison for our results is with the 0.5 tolerance 
-level in the original paper as a difference of less than 0.5 would round to 
+level in the original paper -- a difference of less than 0.5 would round to 
 the correct value.
 
 ## Performance Criteria
@@ -264,8 +261,8 @@ to use:
 - Linear Discriminant Analysis (lda) - to see if there are any interesting
 differences with Naive Bayes if we don't assume variable independence
 
-We are specifically excluding the two models of the original paper to see if
-we can do better without the models used there.
+We are specifically excluding the two models of the original paper (NN and SVM)
+to see if we can do better without the models used there.
 
 Also, that because the SMOTE oversampling algorithm relies on a knn methodology,
 we will not be including knn in the base models in order to avoid potentially
@@ -300,7 +297,7 @@ base_results <- ensemble_eval(training)
 ```
 
 ```{r cm base combo}
-# complete confusion matrix for training data
+# confusion matrix for predictions on training data
 cm <- confusionMatrix(base_results[[1]], training$quality)
 cm
 ```
@@ -368,7 +365,7 @@ model_summary[3,3] <- test_f
 
 When we apply our model to the testing set, we see a relatively significant
 degradation in performance - essentially to the level of the original paper,
-likely indicating some overfitting in the test results.
+likely indicating some overfitting in our model.
 
 Importantly, our model is doing a very poor job at predicting minority classes
 in the test set -- especially quality ratings of 3, 4, and 8, which have the
@@ -386,18 +383,25 @@ data.
 Simplified, the algorithm works as follows:
 
 1) Establish a baseline performance level for each majority and minority class
-2) For each Majority class, undersample by 10% until either minority class
+
+2) For each majority class, undersample by 10% until either minority class
 predictions stop improving, or until majority class predictions degrade by 5%.
-3) For each Minority class, SMOTE oversample by 100%, and continue this 
-until that minority class performance is increased by less than 5%.
+There is no guarantee that the majority class will in fact be undersampled.
+
+3) For each minority class, SMOTE oversample by 100%, and continue this 
+until that minority class performance is increased by less than 5% three times.
+This guarantees at least a 800% oversample rate for each class.^[The first 
+oversample is based on the original data, giving us a class size double the 
+original.  The next oversample is based on the oversampled *and* original data, 
+giving us results that are 4x the original data, etc.]
 
 The specific R code for my implementation is shown in Appendix 2.  The
 algorithm returns a reshaped data set that will be used to generate our
 final predictive model.^[Because I don't have a great grasp of how R memory
-allocation works, I was unable to run this through the RMD file, as my laptop
+allocation works, I was unable to run this through knitr.  My laptop
 ran out of memory in executing the algorithm.  Instead I ran the code through 
-R's console, saved the final data set to disk and loaded it into the RMD file 
-for further manipulation.]
+R's console with occasional memory purges, saved the final data set to disk and
+loaded it into the RMD file for further manipulation.]
 
 ```{r reshape, eval=FALSE}
 # algorithm needs a named vector of class categories
@@ -429,9 +433,7 @@ legend('topright', c('original', 'reshaped'),
 box()
 ```
 
-The changes appear to have been fairly minor, with no oversampling at all for
-a quality rating of four.  That mean we would have seen maximum impact on 
-our f-statistics after one or two iterations of undersamling or oversampling.
+## **Say something about new distribution once plotted**
 
 But more importantly, let's see if our reshaped data gives us a better model.
 We will look at how the model works for both our original training data, and
@@ -446,8 +448,14 @@ new_test_results <- ensemble_eval(new_training, testing)
 ```
 
 ```{r update and display final results comparison}
+# confusion Matrix for model applied to original training data
 cm3 <- confusionMatrix(new_train_results$final, training$quality)
+cm3
+
+# confusion matrix for model applied to testing data
 cm4 <- confusionMatrix(new_test_results$final, testing$quality)
+cm4
+
 model_summary <- rbind(model_summary, rep(NA, 3), rep(NA,3))
 model_summary[4,1] <- 'reshaped_train'
 model_summary[5,1] <- 'reshaped_test'
@@ -455,20 +463,147 @@ model_summary[4,2] <- cm3$overall[1]
 model_summary[5,2] <- cm4$overall[2]
 f_stat <- NULL
 for (i in c(1,2,5,6)) {
-    f_stat<- c(f_stat, 
-               (2 * cm3$byClass[i,1] * cm3$byClass[i,3]) / 
-                   (cm3$byClass[i,1] + cm3$byClass[i,3]))
+    newf <-  (2 * cm3$byClass[i,1] * cm3$byClass[i,3]) / 
+        (cm3$byClass[i,1] + cm3$byClass[i,3])
+    if (is.nan(newf)) {newf <- 0}
+    f_stat<- c(f_stat, newf)
 }
 model_summary[4,3] <- mean(f_stat)
 f_stat <- NULL
 for (i in c(1,2,5,6)) {
-    f_stat<- c(f_stat, 
-               (2 * cm4$byClass[i,1] * cm4$byClass[i,3]) / 
-                   (cm4$byClass[i,1] + cm4$byClass[i,3]))
+    newf <-  (2 * cm4$byClass[i,1] * cm4$byClass[i,3]) / 
+        (cm4$byClass[i,1] + cm4$byClass[i,3])
+    if (is.nan(newf)) {newf <- 0}
+    f_stat<- c(f_stat, newf)
 }
 model_summary[5,3] <- mean(f_stat)
 model_summary
 ```
+
+
+# Write Something Here
+
+# 'Hatchet Job' Under/Oversample
+
+We've seen ** with the elegant approach **
+
+As a final comparison, let's see what happens if we just take a very crude
+approach to over/under sampling.
+
+In this case, we're going to reduce the two majority classes by 25%, and 
+increase each of the three minority classes by 1000% (using SMOTE).^[The code
+for this is not echoed in the report, but I updated the populate function to
+change the os_rate parameter to 10.  Updated code is in the original RMD file.]
+
+```{r new populate, echo=FALSE}
+populate <- function(class_rep, near_nbrs, k) {
+    # class_rep is the class member being replicated as a data frame
+    ## near_nbrs is a data frame of the k nearest neighbours of class_rep
+    # This implementation assumes all predictor variables are continuous
+    
+    os_rate <- 10  # oversample rate (1 = 100%)
+    
+    new_samples <- data.frame(matrix(NA, nrow = 0, ncol = ncol(near_nbrs)))
+    colnames(new_samples) <- colnames(near_nbrs)
+    while (os_rate > 0) {
+        nn <- sample(1:k, 1)
+        synthetic <- class_rep[1,]
+        for (i in 1:(ncol(near_nbrs) - 1)) {
+            dif <- near_nbrs[nn, i] - class_rep[1,i]
+            gap <- runif(1, 0, 1)
+            synthetic[1,i] <- class_rep[1,i] + gap * dif
+        }
+        new_samples <- rbind(new_samples, synthetic)
+        os_rate <- os_rate - 1
+    }
+    return(new_samples)
+}
+```
+
+```{r hatchet reshaping}
+# Split classes
+class3 <- training[training$quality==3,]
+class4 <- training[training$quality==4,]
+class5 <- training[training$quality==5,]
+class6 <- training[training$quality==6,]
+class7 <- training[training$quality==7,]
+class8 <- training[training$quality==8,]
+
+# Oversample minority classes by 1000% using SMOTE
+class3 <- rbind(class3, smote(class3, training, TRUE))
+class4 <- rbind(class4, smote(class4, training, TRUE))
+class8 <- rbind(class8, smote(class8, training, TRUE))
+
+# Undersample majority classes by 25%
+set.seed(75657)
+class5 <- class5[sample(nrow(class5), floor(nrow(class5) * 0.75)),]
+class6 <- class5[sample(nrow(class6), floor(nrow(class6) * 0.75)),]
+
+# Class 7 remains in it original form
+
+# Combine reshaped data into new training set
+hatchet_train <- rbind(class3, class4, class5, class6, class7, class8)
+```
+
+```{r build hatchet model, cache=TRUE}
+hatchet_train_pred <- ensemble_eval(hatchet_train, training)
+```
+
+```{r build hatchet test, cache=TRUE}
+hatchet_test_pred <- ensemble_eval(hatchet_train, testing)
+```
+
+```{r evaluate hatchet}
+# confusion Matrix for 'hatchet job' model applied to original training data
+cm5 <- confusionMatrix(hatchet_train_pred$final, training$quality)
+cm5
+
+# confusion matrix for model applied to testing data
+cm6 <- confusionMatrix(hatchet_test_pred$final, testing$quality)
+cm6
+
+model_summary <- rbind(model_summary, rep(NA, 3), rep(NA,3))
+model_summary[6,1] <- 'hatchet_train'
+model_summary[7,1] <- 'hatchet_test'
+model_summary[6,2] <- cm5$overall[1]
+model_summary[7,2] <- cm5$overall[2]
+f_stat <- NULL
+for (i in c(1,2,5,6)) {
+    newf <-  (2 * cm5$byClass[i,1] * cm5$byClass[i,3]) / 
+        (cm5$byClass[i,1] + cm5$byClass[i,3])
+    if (is.nan(newf)) {newf <- 0}
+    f_stat<- c(f_stat, newf)
+}
+model_summary[6,3] <- mean(f_stat)
+f_stat <- NULL
+for (i in c(1,2,5,6)) {
+    newf <-  (2 * cm6$byClass[i,1] * cm6$byClass[i,3]) / 
+        (cm6$byClass[i,1] + cm6$byClass[i,3])
+    if (is.nan(newf)) {newf <- 0}
+    f_stat<- c(f_stat, newf)
+}
+model_summary[6,3] <- mean(f_stat)
+model_summary
+```
+
+# Comparison of Results to Original Paper
+
+As noted above, there are three main differences between our approach and that
+taken in the original paper:
+
+1. We chose to apply a classification, rather than regression approach
+
+2. We relied on an ensemble learning approach, rather than a single model
+
+3. We transformed the original data through over/under sampling.
+
+The comparative results are shown just above in the results summary table.
+
+Essentially **conclude something**
+
+# Conclusion
+
+
 
 \newpage
 
