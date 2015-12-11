@@ -40,6 +40,7 @@ require(FNN)
 # load functions that are used later in analysis
 source('ensemble_eval.R')
 source('over_under_wrapper.R')
+source('find_minor_class_f_stat.R')
 
 red <- read.csv('winequality-red.csv', sep = ';')
 # Treating as classification problem so convert quality to factor variable
@@ -233,6 +234,12 @@ In order to minimize the impact of the relative overweight in class 7, we will
 be using the mean of the f-stats for these four classes, rather than 
 calculating an overall f-stat for all non-average-rated classes combined.
 
+The code for the function we will have written to calculate this is:
+
+```{r show f stat code, echo=FALSE}
+find_minor_f
+```
+
 ## Model Selection
 
 Given the relatively weak predictive accuracy (at T=0.5) for the models in the
@@ -251,7 +258,9 @@ http://sux13.github.io/DataScienceSpCourseNotes/8_PREDMACHLEARN/Practical_Machin
 In order to build an ensemble model, we first need to build a number of
 individual models to combine into the final approach.  In an attempt to bring
 together all we've done in the course (plus a little bit more!), we're going
-to use:
+to use:^[Although we didn't go over all of these in class, I am confident that
+I have a good understanding of them, and would be happy to discuss in further
+detail if you have questions as to that end.]
 
 - multinomial logistic regression (multinom or mn)
 - Naïve Bayes (nb)
@@ -284,6 +293,15 @@ As per the original paper, we will be evaluating the feed-in models based on
 standardized data.  This is done through the preProcess function in R's caret
 library.
 
+## Dimensionality Reduction
+
+As noted earlier, we can use PCA to simplify the data set to 2 principal
+components and with those, capture 99% of the variance in the original data set.
+I have not actually implemented this, although it would likely simplify and
+speed up some of the computation that follows.  It is worth considering, 
+especially if we attempt to apply this to the white wine data set which is 
+much larger.
+
 # Implementation of Ensemble Model
 
 ## Model baseline testing
@@ -314,13 +332,7 @@ for each of those is technically NaN.  I have substituted with zero to compare.]
 
 ```{r base f stat}
 # Average non-average-quality f-stat for our model
-f_stat <- NULL
-for (i in c(1,2,5,6)) {
-    f_stat<- c(f_stat, 
-               (2 * cm$byClass[i,1] * cm$byClass[i,3]) / 
-                   (cm$byClass[i,1] + cm$byClass[i,3]))
-}
-f_stat <- mean(f_stat)
+f_stat <- find_minor_f(cm)
 
 # Average non-average-quality f-stat for original paper
 paper_f <- mean(c(0, 0, (2*(1/53)*(1/5))/(1/53+1/5), 
@@ -332,9 +344,9 @@ print(paste('original paper f-stat', paper_f))
 
 ```{r comparison data frame, echo=FALSE}
 # Store results for various models in a data frame for easy comparison
-model_summary <- data.frame(model = c('paper', 'base_train'), 
-                            accuracy = c(0.64, cm$overall[1]), 
-                            f_stat = c(paper_f, f_stat),
+model_summary <- data.frame(model = 'paper', 
+                            accuracy = 0.64, 
+                            f_stat = paper_f,
                             stringsAsFactors = FALSE)
 
 ```
@@ -354,17 +366,16 @@ cm2$table
 cm2$overall
 
 # Average non-average-quality f-stat for our model
-test_f <- mean(c(0,0,0,(2*cm2$byClass[5,1] * cm2$byClass[5,3])/ 
-                     (cm2$byClass[5,1] + cm2$byClass[5,3])))
+test_f <- find_minor_f(cm2)
 test_f
 ```
 
-```{r result update 1}
+```{r result update 1, echo=FALSE}
 # Update results table
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[3,1] <-'base_test'
-model_summary[3,2] <- cm2$overall[1]
-model_summary[3,3] <- test_f
+model_summary[2,1] <-'base_ensemble'
+model_summary[2,2] <- cm2$overall[1]
+model_summary[2,3] <- test_f
 ```
 
 When we apply our model to the testing set, we see a relatively significant
@@ -377,6 +388,62 @@ weakest representation in our data.
 
 So, in an effort to improve on this, we need to turn to our function for 
 undersampling and SMOTE oversampling.
+
+## Ensemble model vs. component models
+
+It's also worth looking at how well our ensemble model is working in 
+comparison to each of the individual component parts.  As noted earlier, in
+theory, we should be getting better results.
+
+```{r base test components}
+cm_mn <- confusionMatrix(base_test$mn, testing$quality)
+cm_nb <- confusionMatrix(base_test$nb, testing$quality)
+cm_rf <- confusionMatrix(base_test$rf, testing$quality)
+cm_gbf <- confusionMatrix(base_test$gbm, testing$quality)
+cm_lda <- confusionMatrix(base_test$lda, testing$quality)
+
+# Multinomial
+cm_mn$overall[1]; find_minor_f(cm_mn)
+
+# Naive Bayes
+cm_nb$overall[1]; find_minor_f(cm_nb)
+
+# Random Forest
+cm_rf$overall[1]; find_minor_f(cm_rf)
+
+# Boosting
+cm_gbf$overall[1]; find_minor_f(cm_gbf)
+
+# Linear Discriminant Analysis
+cm_lda$overall[1]; find_minor_f(cm_lda)
+```
+
+```{r base component update table, echo=FALSE}
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[3,1] <-'base_multinom'
+model_summary[3,2] <- cm_mn$overall[1]
+model_summary[3,3] <- find_minor_f(cm_mn)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[4,1] <-'base_naive_bayes'
+model_summary[4,2] <- cm_nb$overall[1]
+model_summary[4,3] <- find_minor_f(cm_nb)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[5,1] <-'base_random_forest'
+model_summary[5,2] <- cm_rf$overall[1]
+model_summary[5,3] <- find_minor_f(cm_rf)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[6,1] <-'base_boosting'
+model_summary[6,2] <- cm_gbf$overall[1]
+model_summary[6,3] <- find_minor_f(cm_gbf)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[7,1] <-'base_linear_discriminant'
+model_summary[7,2] <- cm_lda$overall[1]
+model_summary[7,3] <- find_minor_f(cm_lda)
+```
 
 # Undersampling/SMOTE oversampling implementation
 
@@ -424,7 +491,7 @@ new_training$quality <- as.factor(new_training$quality)
 First, let's see how our new distribution compares to the original training
 data:
 
-```{r examine new}
+```{r examine new, echo=FALSE}
 barplot(rbind(table(training$quality), 
               table(new_training$quality)), 
         main = 'Comparison of reshaped & original data',
@@ -443,7 +510,7 @@ now approximates the majority classes.  Class 3 and 8 are still relatively
 underepresented.
 
 But more importantly, let's see if our reshaped data gives us a better model.
-We will look at how the model works for both our testing data set.
+We will look at how the model works for our testing data set.
 
 ```{r new model testing, cache=TRUE, warning=FALSE, message=FALSE}
 new_test_results <- ensemble_eval(new_training, testing)
@@ -456,17 +523,40 @@ cm3$table
 cm3$overall
 
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[4,1] <- 'reshaped_test'
-model_summary[4,2] <- cm3$overall[1]
+model_summary[8,1] <- 'reshaped_ensemble'
+model_summary[8,2] <- cm3$overall[1]
+model_summary[8,3] <- find_minor_f(cm3)
 
-f_stat <- NULL
-for (i in c(1,2,5,6)) {
-    newf <-  (2 * cm3$byClass[i,1] * cm3$byClass[i,3]) / 
-        (cm3$byClass[i,1] + cm3$byClass[i,3])
-    if (is.nan(newf)) {newf <- 0}
-    f_stat<- c(f_stat, newf)
-}
-model_summary[4,3] <- mean(f_stat)
+cm_mn_r <- confusionMatrix(new_test_results$mn, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[9,1] <- 'reshaped_multinom'
+model_summary[9,2] <- cm_mn_r$overall[1]
+model_summary[9,3] <- find_minor_f(cm_mn_r)
+
+cm_nb_r <- confusionMatrix(new_test_results$nb, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[10,1] <- 'reshaped_naive_bayes'
+model_summary[10,2] <- cm_nb_r$overall[1]
+model_summary[10,3] <- find_minor_f(cm_nb_r)
+
+cm_rf_r <- confusionMatrix(new_test_results$rf, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[11,1] <- 'reshaped_random_forest'
+model_summary[11,2] <- cm_rf_r$overall[1]
+model_summary[11,3] <- find_minor_f(cm_rf_r)
+
+cm_gbf_r <- confusionMatrix(new_test_results$gbm, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[12,1] <- 'reshaped_boosting'
+model_summary[12,2] <- cm_gbf_r$overall[1]
+model_summary[12,3] <- find_minor_f(cm_gbf_r)
+
+cm_lda_r <- confusionMatrix(new_test_results$lda, testing$quality)
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[13,1] <- 'reshaped_linear_discrim'
+model_summary[13,2] <- cm_lda_r$overall[1]
+model_summary[13,3] <- find_minor_f(cm_lda_r)
+
 print(model_summary, row.names=FALSE)
 ```
 

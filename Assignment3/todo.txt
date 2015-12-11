@@ -1,15 +1,5 @@
 TODO:
 
-1) Add data frame to keep track of & compare test results
+1) Add in sub-model data and update summary table
 
-2) Test over_under wrapper: seems good
-
-2b) Delete all the print statements from over_under
-
-4) Run algo on resampled data
-
-6) Rewrite intro/Overview
-
-7) Compare with paper
-
-8) Conclusion
+2) use f-stat function
