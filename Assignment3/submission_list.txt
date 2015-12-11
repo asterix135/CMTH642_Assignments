@@ -1,0 +1,6 @@
+- Assignment3_C_Graham.pdf - Final Report
+- Assignment3_C_Graham.Rmd - R Markdown file used in report generation
+- ensemble_eval.R - code for model
+- over_under_wrapper.R - code for under/over- sampling algorithm
+- find_minor_class_f_stat.R - function to find average f-stat for minority classes
+- undersampled.csv - reshaped data set used in building final model

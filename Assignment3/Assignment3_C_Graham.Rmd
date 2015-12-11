@@ -13,7 +13,7 @@ results obtained by the original paper to work with the data.
 
 We instigated two main changes over the original paper's approach: applying an 
 ensemble learning model to the data, and using an undersampling/SMOTE
-oversamling algorithm to deal with class imbalance in the data.  
+oversampling algorithm to deal with class imbalance in the data.  
 
 In the end, however, we were not able to improve on the original paper's
 overall accuracy, and were only able to marginally improve the quality
@@ -418,32 +418,23 @@ cm_gbf$overall[1]; find_minor_f(cm_gbf)
 cm_lda$overall[1]; find_minor_f(cm_lda)
 ```
 
-```{r base component update table, echo=FALSE}
-model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[3,1] <-'base_multinom'
-model_summary[3,2] <- cm_mn$overall[1]
-model_summary[3,3] <- find_minor_f(cm_mn)
+This shows some interesting results.  Namely that the random forest model seems
+head and tails above the other ones - including our ensemble model - in both
+overall prediction accuracy, and in the f-score it returns for the minority 
+classes.  The f-score itself isn't eye-poppingly better than either Naive Bayes
+or Boosting, but the combination of overall accuracy and f-score makes this
+modelling approach stand out as perhaps the best way of analyzing this data.
 
-model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[4,1] <-'base_naive_bayes'
-model_summary[4,2] <- cm_nb$overall[1]
-model_summary[4,3] <- find_minor_f(cm_nb)
+Also, the ensemble approach does not appear to be working that well in 
+comparison to its constituent models.  The ensemble's overall accuracy is about
+the mean of the constituent models, and it's minority class f-score is actually
+lower than the average of its constituents.
 
-model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[5,1] <-'base_random_forest'
-model_summary[5,2] <- cm_rf$overall[1]
-model_summary[5,3] <- find_minor_f(cm_rf)
-
-model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[6,1] <-'base_boosting'
-model_summary[6,2] <- cm_gbf$overall[1]
-model_summary[6,3] <- find_minor_f(cm_gbf)
-
-model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[7,1] <-'base_linear_discriminant'
-model_summary[7,2] <- cm_lda$overall[1]
-model_summary[7,3] <- find_minor_f(cm_lda)
-```
+At this point, it would probably be most logical to drop multinomial 
+regression and Linear Discriminant Analysis from our approach, as neither
+shows excellence on either performance metric we have adopted.  But in a spirit
+of inquiry, let's forge ahead and see what happens to all the models once
+we reshape the data.
 
 # Undersampling/SMOTE oversampling implementation
 
@@ -507,7 +498,7 @@ box()
 As you can see, the majority classes decreased by a small amount, while the
 majority classes have seen a significant increase in representation.  Class 4
 now approximates the majority classes.  Class 3 and 8 are still relatively 
-underepresented.
+underrepresented.
 
 But more importantly, let's see if our reshaped data gives us a better model.
 We will look at how the model works for our testing data set.
@@ -523,33 +514,58 @@ cm3$table
 cm3$overall
 
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[8,1] <- 'reshaped_ensemble'
-model_summary[8,2] <- cm3$overall[1]
-model_summary[8,3] <- find_minor_f(cm3)
+model_summary[3,1] <- 'reshaped_ensemble'
+model_summary[3,2] <- cm3$overall[1]
+model_summary[3,3] <- find_minor_f(cm3)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[4,1] <-'base_multinom'
+model_summary[4,2] <- cm_mn$overall[1]
+model_summary[4,3] <- find_minor_f(cm_mn)
 
 cm_mn_r <- confusionMatrix(new_test_results$mn, testing$quality)
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[9,1] <- 'reshaped_multinom'
-model_summary[9,2] <- cm_mn_r$overall[1]
-model_summary[9,3] <- find_minor_f(cm_mn_r)
+model_summary[5,1] <- 'reshaped_multinom'
+model_summary[5,2] <- cm_mn_r$overall[1]
+model_summary[5,3] <- find_minor_f(cm_mn_r)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[6,1] <-'base_naive_bayes'
+model_summary[6,2] <- cm_nb$overall[1]
+model_summary[6,3] <- find_minor_f(cm_nb)
 
 cm_nb_r <- confusionMatrix(new_test_results$nb, testing$quality)
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[10,1] <- 'reshaped_naive_bayes'
-model_summary[10,2] <- cm_nb_r$overall[1]
-model_summary[10,3] <- find_minor_f(cm_nb_r)
+model_summary[7,1] <- 'reshaped_naive_bayes'
+model_summary[7,2] <- cm_nb_r$overall[1]
+model_summary[7,3] <- find_minor_f(cm_nb_r)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[8,1] <-'base_random_forest'
+model_summary[8,2] <- cm_rf$overall[1]
+model_summary[8,3] <- find_minor_f(cm_rf)
 
 cm_rf_r <- confusionMatrix(new_test_results$rf, testing$quality)
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[11,1] <- 'reshaped_random_forest'
-model_summary[11,2] <- cm_rf_r$overall[1]
-model_summary[11,3] <- find_minor_f(cm_rf_r)
+model_summary[9,1] <- 'reshaped_random_forest'
+model_summary[9,2] <- cm_rf_r$overall[1]
+model_summary[9,3] <- find_minor_f(cm_rf_r)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[10,1] <-'base_boosting'
+model_summary[10,2] <- cm_gbf$overall[1]
+model_summary[10,3] <- find_minor_f(cm_gbf)
 
 cm_gbf_r <- confusionMatrix(new_test_results$gbm, testing$quality)
 model_summary <- rbind(model_summary, rep(NA, 3))
-model_summary[12,1] <- 'reshaped_boosting'
-model_summary[12,2] <- cm_gbf_r$overall[1]
-model_summary[12,3] <- find_minor_f(cm_gbf_r)
+model_summary[11,1] <- 'reshaped_boosting'
+model_summary[11,2] <- cm_gbf_r$overall[1]
+model_summary[11,3] <- find_minor_f(cm_gbf_r)
+
+model_summary <- rbind(model_summary, rep(NA, 3))
+model_summary[12,1] <-'base_linear_discriminant'
+model_summary[12,2] <- cm_lda$overall[1]
+model_summary[12,3] <- find_minor_f(cm_lda)
 
 cm_lda_r <- confusionMatrix(new_test_results$lda, testing$quality)
 model_summary <- rbind(model_summary, rep(NA, 3))
@@ -560,15 +576,45 @@ model_summary[13,3] <- find_minor_f(cm_lda_r)
 print(model_summary, row.names=FALSE)
 ```
 
-By implementing some over/under sampling reshaping of the original data, we 
-do in fact see an increase in accuracy on the testing set.  The performance
-on the training data actually fell a bit, indicating a somewhat less overfit
-model.
+```{r result barplot, echo=FALSE}
+# need barplot code here
 
-In addition, we're seeing an improved average f-score for our minority class
-wines, with actually some prediction class 4., although still no correct
-predictions in class 3 or 8.
 
+```
+
+With a model based on our reshaped data, we are seeing a decrease in overall
+accuracy for both our ensemble model, and each of the individual components
+of that model.  LDA and Naive Bayes both show rather drastic drop-offs in
+accuracy, perhaps reinforcing our earlier observation that these models should
+have been dropped after our initial analysis.
+
+On the flip side, we're seeing that, other than with the Naive Bayes model, the
+minority class f-score average improves with the resampled data.
+
+This is pretty much what we'd expect to see, as the undersampling causes some
+accuracy loss with the majority classes.  Similarly, minority class performance
+improves as oversampling provides increased information which our model can 
+use to identify characteristics of these minority classes.
+
+## Comments on Naive Bayes Weakness
+
+One of the more surprising results of this work (at least to me) was the 
+severe degradation of the Naive Bayes Model's accuracy as a result of our class
+rebalancing.  
+
+On reflection, however, this isn't all that shocking.  Naive Bayes' main 
+strengths as a classifier are that it is fairly light-weight, with good
+accuracy, and that it doesn't need tons of data to work well.^[See, for example
+Forman and Cohen, p12, who note that "Naive Bayes models are often relatively 
+insensitive to a shift in training distribution"]  This compares rather starkly
+with the Random Forest approach which is quite resource-intensive to build, and
+that readily improves with additional data points.
+
+In other words, class imbalance seems to be less of a problem with the 
+probabilistic methodologies that underpin both Naive Bayes and LDA.  As such,
+if a light-weight, average performance model is acceptable, Naive Bayes is 
+probably a good choice, especially in that class rebalancing does not appear to 
+be particularly necessary, or even helpful.
 
 # Comparison of Results to Original Paper and Conclusions
 
@@ -585,8 +631,8 @@ taken in the original paper:
 
 The comparative results are shown just above in the results summary table.
 
-At the end of the day, however, we achieved very similar results to the 
-original paper with a significantly more complicated approach.
+At the end of the day, however, our ensemble approach achieved pretty similar
+results to those in the original papers, albeit with a whole lot more work.
 
 ## Ensemble model vs. SVM (Original model)
 
@@ -595,9 +641,9 @@ the original paper's SVM approach.  In addition, the average f-statistic for
 minority classes was weaker in our model, than for the SVM approach in the
 original paper.
 
-Part of the reason for this weaker performance was likely the mix
-of models we incuded in our ensemble, as these models were not evaluated prior
-to inclusion.
+Part of the reason for this weaker performance was the relative weakness of 
+the probabilistic approaches of Naive Bayes and LDA, and the relative overweight
+that these models had in contributing to the final evaluation.
 
 A better practice to building the ensemble model would be to first evaluate
 the predictive effectiveness of a number of different approaches, and then
@@ -606,17 +652,23 @@ combine the most effective approaches into a final model.
 ## Impact of class rebalancing
 
 The impact of the over/under sampling algorithm we introduced was interesting.
-It reduced the overall accuracy of the model by about 10%, while boosting the
-average f-stat for minority classes by about 20%.  Overall predictive ability
-for minority classes was still rather weak even after this transformation.
+It reduced the overall accuracy of the ensemble model by about 10%, while 
+boosting the average f-stat for minority classes by about 20%.  Overall 
+predictive ability for minority classes was still rather weak even after this
+transformation.
+
+With our random forest model, on the other hand, the gains in minority class
+predictive quality were a bit more pronounced, with our f-stat rising to 0.18,
+with a very small drop-off in overall predictive ability.  Still, though, this
+is not a particularly impressive result when we look at how well we did at 
+predicting good or bad wines.
 
 Overall, it appears, from this one example, that if minority class prediction
-is an important metric for model evaluation, then this kind of approach to
-class rebalancing may be worthwhile.  If the main criterion is overall accuracy,
-then rebalancing may not be worth the effort, as it will almost certainly
-reduce accuracy.
+is an important metric for model evaluation, then class rebalancing may be 
+worthwhile.  If the main criterion is overall accuracy, then rebalancing may 
+not be worth the effort, as it will almost certainly reduce accuracy.
 
-## Comments about predicing wine quality based on chemical ratings
+## Final comments
 
 Finally, it's worth noting that this entire exercise in predicting quality based
 on chemical ratings may be flawed to begin with.  Price, for example, has been
@@ -625,12 +677,20 @@ that can be verified through brain MRI scans.^[Plassman et al, "Marketing
 Actions Can Modulate Neural Representations of Experienced Pleasantness"]  In
 other words, if we know that people's *physical* experience of pleasure from
 a wine can be influenced by the wine's price point, it's hard to believe that
-chemical analyis is really going to be able to provide a strongly-reliable
+chemical analysis is really going to be able to provide a strongly-reliable
 set of predictors of wine quality.
 
-As such, it's unlikely that we'd be able to achieve a model that would be 
-great at predicting consumer perceptions of quality without taking into 
-account the social cues that factor into those ratings.
+This malleable aspect of quality ratings probably puts an upper bound on the 
+ability of any model to predict quality based on chemical ratings.  In the 
+original paper, the white wine predictions were not noticeably better than the
+red wine predictions (SVM gave 64.6% accuracy at T=0.5 for white, vs 62.4% for
+red).  This is in spite of the fact that the data set is three times the size of 
+the red.
+
+The random forest model is clearly head and shoulders above the other options 
+for its combination of accuracy and minority class predictive ability.  But it
+is worth investigating whether a better composed ensemble learning model could
+improve on this sole model.
 
 \newpage
 
@@ -694,6 +754,12 @@ its empirical relationship to cost. Data Mining and Knowledge Discovery.
 Cortez P, Cerdeira A, Almeida F, Matos T, Reis J. Modeling wine preferences by 
 data mining from physicochemical properties. Decision Support Systems. 
 2009;47(4):547-53.
+
+Foreman, George and Cohen, Ira, Learning from Little: Comparison of Classifiers
+Given Little Training, Hewlett-Packard Research Laboratories, 15th European 
+Conference on Machine Learning and the 8th European Conference on Principles and 
+Practice of Knowledge Discovery in Databases, 20-24 September 2004, Pisa, Italy 
+http://www.ifp.illinois.edu/~iracohen/publications/precision-ecml04-ColorTR-final.pdf
 
 Plassmann H, O'Doherty J, Shiv B, Rangel A. Marketing Actions Can Modulate 
 Neural Representations of Experienced Pleasantness. Proceedings of the National

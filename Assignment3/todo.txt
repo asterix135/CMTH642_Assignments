@@ -1,5 +1,8 @@
 TODO:
 
-1) Add in sub-model data and update summary table
+Make bar chart
 
-2) use f-stat function
+model <- c('paper', 'base_ensemble', 'reshaped_ensemble', 'base_multinom', 'reshaped_multinom', 'base_naive_bayes', 'reshaped_naive_bayes', 'base_random_forest', 'reshaped_random_forest', 'base_boosting', 'reshaped_boosting', 'base_lda', 'reshaped_lda')
+accuracy <- c(.640, .631, .561, .608, .523, .603, .470, .716, .700, .634, .621, .612, .517)
+f_stat <- c(.130, .119, .144, .105, .129, .147, .142, .153, .179, .143, .150, .127, .142)
+model_summary <- data.frame(model, accuracy, f_stat)
