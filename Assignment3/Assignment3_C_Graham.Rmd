@@ -11,13 +11,17 @@ This assignment develops a model to predict a subjective quality rating on
 Portuguese red vinho verde wines.  The results we generate are compared with
 results obtained by the original paper to work with the data.
 
-We instigated two main changes over the original paper's approach: applying an 
-ensemble learning model to the data, and using an undersampling/SMOTE
-oversampling algorithm to deal with class imbalance in the data.  
+We instigated three main changes over the original paper's approach: 
 
-In the end, however, we were not able to improve on the original paper's
-overall accuracy, and were only able to marginally improve the quality
-with which we predicted minority class membership.
+1. approaching this as a classification, rather than regression problem
+2. applying an ensemble learning model to the data
+3. using an undersampling/SMOTE oversampling algorithm to deal with class 
+imbalance in the data.  
+
+Our ensemble model did not improve on the original paper's SVM approach, 
+probably due to a poor choice of component models.  However, one of the
+constituents of our ensemble model - random forests - showed markedly better
+performance.
 
 # Import and Split Data
 
@@ -83,9 +87,10 @@ plot(pc_comp$x[,1], pc_comp$x[,2],
      ylab = 'PCA2')
 ```
 
-Essentially, it's a mess, with no readily apparent trends.  There seems to be a
-bit of a division between some of the major classes, but nothing particularly
-clear.  We'll see if we can make sense of it with some machine learning.
+Essentially, it's a mess, with a great deal of overlap between classes and no
+readily apparent trends.  There seems to be a bit of a division between some of 
+the major classes, but nothing particularly clear.  We'll see if we can make 
+sense of it with some machine learning.
 
 ## Class Balance
 
@@ -98,7 +103,7 @@ shown to be a significant problem in building an effective Machine Learning
 model.  We  provide a strategy for dealing with this below, but first will
 look at some other characteristics of the data.
 
-```{r qual histogram}
+```{r qual histogram, echo=FALSE}
 ggplot(training, aes(x=quality)) +
     geom_histogram(color='black', fill='white') +
     ggtitle('Distribution of Quality Scores') +
@@ -577,8 +582,36 @@ print(model_summary, row.names=FALSE)
 ```
 
 ```{r result barplot, echo=FALSE}
-# need barplot code here
 
+barplot(rbind(model_summary[c(2,4,6,8,10,12), 2],
+              model_summary[c(3,5,7,9,11,13), 2]),
+        main = 'Accuracy before & after reshaping',
+        names.arg = c('ensemble', 'mn', 'nb', 'rf', 'gbm', 'lda'),
+        col = c('deeppink', 'chartreuse3'),
+        beside=TRUE)
+abline(h=0.64, col='darkviolet')
+text(3, 0.66, 'Original Paper', col='darkviolet')
+legend('bottomright', c('original', 'reshaped'), 
+       col = c('deeppink', 'chartreuse3'), 
+       lwd=10,
+       bg='white')
+box()
+```
+
+```{r fstat plot, echo=FALSE}
+barplot(rbind(model_summary[c(2,4,6,8,10,12), 3],
+              model_summary[c(3,5,7,9,11,13), 3]),
+        main = 'Minority class f-stat before & after reshaping',
+        names.arg = c('ensemble', 'mn', 'nb', 'rf', 'gbm', 'lda'),
+        col = c('firebrick1', 'slateblue3'),
+        beside=TRUE)
+abline(h=0.13, col='forestgreen')
+text(5, 0.14, 'Original Paper', col='forestgreen')
+legend('bottomright', c('original', 'reshaped'), 
+       col = c('firebrick1', 'slateblue3'), 
+       lwd=10,
+       bg='white')
+box()
 
 ```
 
@@ -624,22 +657,15 @@ As noted above, there are three main differences between our approach and that
 taken in the original paper:
 
 1. We chose to apply a classification, rather than regression approach
-
 2. We relied on an ensemble learning approach, rather than a single model.
-
 3. We transformed the original data through over/under sampling.
-
-The comparative results are shown just above in the results summary table.
-
-At the end of the day, however, our ensemble approach achieved pretty similar
-results to those in the original papers, albeit with a whole lot more work.
 
 ## Ensemble model vs. SVM (Original model)
 
 The ensemble approach we used actually returned slightly weaker accuracy than 
 the original paper's SVM approach.  In addition, the average f-statistic for
-minority classes was weaker in our model, than for the SVM approach in the
-original paper.
+minority classes was weaker in our model, when compared with the SVM approach 
+in the original paper.
 
 Part of the reason for this weaker performance was the relative weakness of 
 the probabilistic approaches of Naive Bayes and LDA, and the relative overweight
@@ -664,33 +690,38 @@ is not a particularly impressive result when we look at how well we did at
 predicting good or bad wines.
 
 Overall, it appears, from this one example, that if minority class prediction
-is an important metric for model evaluation, then class rebalancing may be 
-worthwhile.  If the main criterion is overall accuracy, then rebalancing may 
-not be worth the effort, as it will almost certainly reduce accuracy.
+is an important metric for model evaluation in multi-class classification
+probems, then class rebalancing may be worthwhile if the original data is
+highly unbalanced.  If the main criterion is overall accuracy, then rebalancing 
+may not be worth the effort, as it will almost certainly reduce accuracy.
 
-## Final comments
+## On predicting wine quality
 
 Finally, it's worth noting that this entire exercise in predicting quality based
-on chemical ratings may be flawed to begin with.  Price, for example, has been
-shown to have a significant impact on impression of wine quality - an impact
-that can be verified through brain MRI scans.^[Plassman et al, "Marketing 
-Actions Can Modulate Neural Representations of Experienced Pleasantness"]  In
-other words, if we know that people's *physical* experience of pleasure from
-a wine can be influenced by the wine's price point, it's hard to believe that
-chemical analysis is really going to be able to provide a strongly-reliable
-set of predictors of wine quality.
+on chemical ratings may be flawed to begin with.  For example, it has been shown
+that people will physically find a wine to be more pleasurable (and therefore
+of higher quality), if they believe it has a higher price point.  This
+difference in quality perception has been verified through MRI brain
+scans.^[Plassman et al, "Marketing Actions Can Modulate Neural Representations 
+of Experienced Pleasantness"]  In other words, if we know that people's 
+*physical* experience of pleasure from a wine can be influenced by the wine's 
+price point, it's hard to believe that chemical analysis is really going to be 
+able to provide a strongly-reliable set of predictors of wine quality.
 
 This malleable aspect of quality ratings probably puts an upper bound on the 
 ability of any model to predict quality based on chemical ratings.  In the 
 original paper, the white wine predictions were not noticeably better than the
 red wine predictions (SVM gave 64.6% accuracy at T=0.5 for white, vs 62.4% for
-red).  This is in spite of the fact that the data set is three times the size of 
-the red.
+red).  This is in spite of the fact that the white win data set is three times 
+the size of the red wine data set.
 
-The random forest model is clearly head and shoulders above the other options 
-for its combination of accuracy and minority class predictive ability.  But it
-is worth investigating whether a better composed ensemble learning model could
-improve on this sole model.
+There is definitely some room for improvement, likely through an ensemble
+learning model composed of more and better components, and possibly using 
+a better second-level model than plurality vote.  Given the strength of random
+forest and tree-based bagging, it seems likely that a few other tree approaches
+could help build a stronger ensemble model.  Even with a better selection of
+constitutent models, however, I am doubtful that we could see significant 
+increases in predictive performance.
 
 \newpage
 
