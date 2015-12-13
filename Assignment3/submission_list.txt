@@ -3,4 +3,4 @@
 - ensemble_eval.R - code for model
 - over_under_wrapper.R - code for under/over- sampling algorithm
 - find_minor_class_f_stat.R - function to find average f-stat for minority classes
-- undersampled.csv - reshaped data set used in building final model
+- reshaped.csv - reshaped data set used in building final model
